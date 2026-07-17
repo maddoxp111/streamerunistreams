@@ -227,6 +227,24 @@
     players.set(login, { kind: "iframe", f, holder, tile, login });
   }
 
+  /**
+   * Big players must start muted or the browser blocks their autoplay
+   * entirely — this overlays the one obvious tap that enables sound.
+   * Reads the tile's current login at click time so it survives swaps.
+   */
+  function addSoundCTA(tile) {
+    const b = el("button", "sound-cta", "🔊 TAP FOR SOUND");
+    b.type = "button";
+    b.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const login = tile.dataset.login;
+      setAudio(login);
+      tryPlay(players.get(login));
+      b.remove();
+    });
+    tile.appendChild(b);
+  }
+
   /** Stage note with a START ALL button that pokes every paused player. */
   function noteWithPlayAll(html) {
     const p = el("p", "stage-note", html + ' <button class="btn-mini" type="button">▶ START ALL</button>');
@@ -413,7 +431,7 @@
 
     const focusCh = state.byLogin.get(state.focusLogin);
     const bigTile = makeTile(focusCh);
-    bigTile.classList.add("main", "has-audio");
+    bigTile.classList.add("main");
     grid.appendChild(bigTile);
 
     const ringTiles = [];
@@ -449,13 +467,14 @@
       stripEl = s;
     };
 
-    // players mount only after the grid is in the document
-    mountPlayer(bigTile, focusCh.login, { muted: false });
-    state.audioLogin = focusCh.login;
+    // players mount only after the grid is in the document; the big one
+    // starts muted too (browsers veto unmuted autoplay) with a sound CTA
+    mountPlayer(bigTile, focusCh.login, { muted: true });
+    addSoundCTA(bigTile);
     for (const [t, ch] of ringTiles) mountPlayer(t, ch.login, { muted: true, maxHeight: 480 });
     renderStrip();
     stage.appendChild(noteWithPlayAll(
-      "Big screen carries the <b>audio</b>. Click a small tile to swap it into the main slot."));
+      "Big screen carries the <b>audio</b> — tap 🔊 once to enable it. Click a small tile to swap it into the main slot."));
   }
 
   function refreshTileChips(tile, ch) {
@@ -486,8 +505,7 @@
       const ch = state.byLogin.get(login);
       const t = makeTile(ch, { hint: "CLICK · SOUND", shield: true });
       grid.appendChild(t);
-      mountPlayer(t, login, { muted: i !== 0 });
-      if (i === 0) { t.classList.add("has-audio"); state.audioLogin = login; }
+      mountPlayer(t, login, { muted: true });
       t.addEventListener("click", () => {
         const entry = players.get(login);
         if (entry && entryPaused(entry)) { tryPlay(entry); return; }
@@ -522,7 +540,6 @@
 
     const layout = el("div", "theater-layout");
     const t = makeTile(ch);
-    t.classList.add("has-audio");
     layout.appendChild(t);
 
     const chatWrap = el("div", "theater-chat");
@@ -531,8 +548,8 @@
     chatWrap.appendChild(chat);
     layout.appendChild(chatWrap);
     stage.appendChild(layout);
-    mountPlayer(t, ch.login, { muted: false });
-    state.audioLogin = ch.login;
+    mountPlayer(t, ch.login, { muted: true });
+    addSoundCTA(t);
 
     stage.appendChild(renderPickStrip(
       (login) => { state.theaterLogin = login; renderStage(); save(); },
@@ -563,12 +580,11 @@
 
     const ch0 = live[tourIndex];
     const tile = makeTile(ch0);
-    tile.classList.add("has-audio");
 
     wrap.append(bar, tile);
     stage.appendChild(wrap);
-    mountPlayer(tile, ch0.login, { muted: false });
-    state.audioLogin = ch0.login;
+    mountPlayer(tile, ch0.login, { muted: true });
+    addSoundCTA(tile);
     stage.appendChild(el("p", "stage-note", "Touring every live channel in your selection, in order. Sit back."));
 
     const updateBar = () => {

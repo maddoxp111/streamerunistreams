@@ -362,25 +362,26 @@ body {
 }
 .lecture-grid .tile.main { grid-area: m; cursor: default; }
 
+/* smalls flank the main screen: half on the left, half on the right */
 .lecture-grid.ring-4 {
-  grid-template-columns: 1fr 2.9fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  grid-template-areas: "a m b" "c m d";
+  grid-template-columns: 1fr 3fr 1fr;
+  grid-template-rows: repeat(2, 1fr);
+  grid-template-areas: "a m c" "b m d";
 }
 .lecture-grid.ring-6 {
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: 1fr 2.9fr 1fr;
-  grid-template-areas: "a b c" "m m m" "d e f";
+  grid-template-columns: 1fr 3fr 1fr;
+  grid-template-rows: repeat(3, 1fr);
+  grid-template-areas: "a m d" "b m e" "c m f";
 }
 .lecture-grid.ring-8 {
-  grid-template-columns: 1fr 2.7fr 1fr;
-  grid-template-rows: 1fr 2.7fr 1fr;
-  grid-template-areas: "a b c" "d m e" "f g h";
+  grid-template-columns: 1fr 3.2fr 1fr;
+  grid-template-rows: repeat(4, 1fr);
+  grid-template-areas: "a m e" "b m f" "c m g" "d m h";
 }
 .lecture-grid.ring-12 {
-  grid-template-columns: 1fr 1.85fr 1.85fr 1fr;
-  grid-template-rows: 1fr 1.85fr 1.85fr 1fr;
-  grid-template-areas: "a b c d" "e m m f" "g m m h" "i j k l";
+  grid-template-columns: 1fr 1fr 2.9fr 1fr 1fr;
+  grid-template-rows: repeat(3, 1fr);
+  grid-template-areas: "a b m g h" "c d m i j" "e f m k l";
 }
 
 /* ---- STUDY GROUP (quad) ---- */
@@ -497,6 +498,34 @@ body {
   vertical-align: 1px;
 }
 .btn-mini:hover { background: var(--maroon-deep); color: var(--parchment); }
+
+/* big players start muted (browsers block unmuted autoplay) — this is
+   the one obvious tap that turns the sound on */
+.sound-cta {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 4;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  padding: 10px 22px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.65);
+  animation: ctapulse 2.2s ease-in-out infinite;
+}
+.sound-cta:hover { filter: brightness(1.1); }
+@keyframes ctapulse {
+  0%, 100% { box-shadow: 0 4px 24px rgba(0,0,0,0.65), 0 0 0 0 rgba(201,162,75,0.55); }
+  50% { box-shadow: 0 4px 24px rgba(0,0,0,0.65), 0 0 0 12px rgba(201,162,75,0); }
+}
 
 /* ============ CLIPS ============ */
 .clips-section {
