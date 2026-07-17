@@ -127,6 +127,7 @@
   <div class="section-head">
     <div class="pennant left"></div>
     <h2>DEAN&rsquo;S LIST <span>· TOP CLIPS FROM ACROSS CAMPUS · PAST WEEK</span></h2>
+    <button class="btn-feed" id="feedOpenBtn" hidden title="Watch the clips TikTok-style — scroll for the next one">▶ SCROLL FEED</button>
     <div class="pennant right"></div>
   </div>
   <div class="clips-grid" id="clipsGrid">
@@ -165,14 +166,17 @@
   <div class="drawer-list" id="rosterList"></div>
 </aside>
 
-<!-- ============ CLIP MODAL ============ -->
-<div class="modal-overlay" id="clipModal" hidden>
-  <div class="modal-box">
-    <div class="modal-head">
-      <span id="clipModalTitle"></span>
-      <button class="drawer-close" id="clipModalClose" aria-label="Close">✕</button>
-    </div>
-    <div class="modal-player" id="clipModalPlayer"></div>
+<!-- ============ CLIP FEED (TikTok-style vertical scroll) ============ -->
+<div class="feed-overlay" id="clipFeed" hidden>
+  <div class="feed-top">
+    <span class="feed-brand">DEAN&rsquo;S LIST</span>
+    <span class="feed-counter" id="feedCounter"></span>
+    <button class="feed-close" id="feedClose" aria-label="Close feed">✕</button>
+  </div>
+  <div class="feed-scroll" id="feedScroll"></div>
+  <div class="feed-nav">
+    <button id="feedUp" aria-label="Previous clip">▲</button>
+    <button id="feedDown" aria-label="Next clip">▼</button>
   </div>
 </div>
 

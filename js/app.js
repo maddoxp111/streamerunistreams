@@ -187,6 +187,15 @@
           muted,
           autoplay: true,
         });
+        // The embed lib creates its iframe without allow="autoplay", so
+        // browsers deny autoplay to the cross-origin player and every
+        // stream starts paused. Grant the permission and reload the frame.
+        const f = holder.querySelector("iframe");
+        if (f && !(f.getAttribute("allow") || "").includes("autoplay")) {
+          f.setAttribute("allow", "autoplay; fullscreen");
+          f.src = f.src;
+        }
+        p.addEventListener(Twitch.Player.READY, () => { try { p.play(); } catch (e) {} });
         if (maxHeight) {
           let done = false;
           p.addEventListener(Twitch.Player.PLAYING, () => {
@@ -206,6 +215,13 @@
     f.allowFullscreen = true;
     holder.appendChild(f);
     players.set(login, { kind: "iframe", f, holder, tile, login });
+  }
+
+  function entryPaused(entry) {
+    try { return entry.kind === "api" && entry.p.isPaused(); } catch (e) { return false; }
+  }
+  function tryPlay(entry) {
+    try { if (entry && entry.kind === "api") entry.p.play(); } catch (e) {}
   }
 
   function setAudio(login) {
@@ -319,7 +335,9 @@
         addPreview(tile, ch);
       }
       tile.addEventListener("click", () => {
-        if (players.has(ch.login)) {
+        const entry = players.get(ch.login);
+        if (entry) {
+          if (entryPaused(entry)) { tryPlay(entry); return; } // resume beats audio toggle
           setAudio(state.audioLogin === ch.login ? null : ch.login);
         } else {
           tile.querySelectorAll(".preview, .badge-offline").forEach((n) => n.remove());
@@ -387,6 +405,8 @@
         const promote = t.dataset.login; // channel currently in this small tile
         if (promote === oldBig) return;
         if (!swapTwoPlayers(oldBig, promote)) return;
+        tryPlay(players.get(oldBig));
+        tryPlay(players.get(promote));
         state.focusLogin = promote;
         t.dataset.login = oldBig;
         bigTile.dataset.login = promote;
@@ -450,7 +470,11 @@
       grid.appendChild(t);
       mountPlayer(t, login, { muted: i !== 0 });
       if (i === 0) { t.classList.add("has-audio"); state.audioLogin = login; }
-      t.addEventListener("click", () => setAudio(state.audioLogin === login ? null : login));
+      t.addEventListener("click", () => {
+        const entry = players.get(login);
+        if (entry && entryPaused(entry)) { tryPlay(entry); return; }
+        setAudio(state.audioLogin === login ? null : login);
+      });
     });
 
     stage.appendChild(renderPickStrip(
@@ -715,23 +739,82 @@
           <div class="clip-sub">${c.channel}${c.game ? " · " + c.game : ""}</div>
         </div>`;
       card.querySelector(".clip-title").textContent = c.title;
-      card.addEventListener("click", () => openClip(c));
+      card.addEventListener("click", () => openFeed(allClips.indexOf(c)));
       grid.appendChild(card);
     }
     $("clipsMoreBtn").hidden = clipsShown >= allClips.length;
+    $("feedOpenBtn").hidden = !allClips.length;
   }
 
-  function openClip(c) {
-    const modal = $("clipModal");
-    $("clipModalTitle").textContent = `@${c.login} — ${c.title}`;
-    $("clipModalPlayer").innerHTML =
-      `<iframe src="https://clips.twitch.tv/embed?clip=${encodeURIComponent(c.slug)}&parent=${encodeURIComponent(HOST)}&autoplay=true" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
-    modal.hidden = false;
+  // ---------- clip feed (TikTok-style vertical scroll) ----------
+  let feedObserver = null;
+
+  function clipIframe(slug) {
+    const f = document.createElement("iframe");
+    f.src = `https://clips.twitch.tv/embed?clip=${encodeURIComponent(slug)}&parent=${encodeURIComponent(HOST)}&autoplay=true`;
+    f.allow = "autoplay; fullscreen";
+    f.allowFullscreen = true;
+    return f;
   }
 
-  function closeClip() {
-    $("clipModal").hidden = true;
-    $("clipModalPlayer").innerHTML = "";
+  function openFeed(startIdx = 0) {
+    if (!allClips.length) return;
+    const feed = $("clipFeed");
+    const scroll = $("feedScroll");
+    scroll.innerHTML = "";
+
+    allClips.forEach((c, i) => {
+      const ch = state.byLogin.get(c.login);
+      const item = el("section", "feed-item");
+      item.dataset.idx = i;
+      item.innerHTML = `
+        <div class="feed-stage">
+          <div class="feed-player" data-slug="${c.slug}"></div>
+          <div class="feed-meta">
+            <span class="feed-handle">@${c.login}${ch && ch.live ? ' <span class="feed-live">● LIVE</span>' : ""}</span>
+            <p class="feed-title"></p>
+            <p class="feed-sub">▶ ${fmtViewers(c.views)} views${c.game ? " · " + c.game : ""}</p>
+          </div>
+        </div>`;
+      item.querySelector(".feed-title").textContent = c.title;
+      scroll.appendChild(item);
+    });
+
+    feed.hidden = false;
+    document.body.style.overflow = "hidden";
+
+    // Only the clip on screen has a live iframe: it mounts (autoplaying)
+    // when its item snaps into view and unmounts once fully scrolled away,
+    // so exactly one clip plays — and is audible — at a time.
+    feedObserver = new IntersectionObserver((entries) => {
+      for (const en of entries) {
+        if (en.intersectionRatio < 0.6) continue;
+        const player = en.target.querySelector(".feed-player");
+        $("feedCounter").textContent = `${+en.target.dataset.idx + 1} / ${allClips.length}`;
+        // exactly one live clip at a time: kill every other player first
+        scroll.querySelectorAll(".feed-player").forEach((p) => {
+          if (p !== player && p.firstChild) p.innerHTML = "";
+        });
+        if (!player.querySelector("iframe")) player.appendChild(clipIframe(player.dataset.slug));
+      }
+    }, { root: scroll, threshold: 0.6 });
+    scroll.querySelectorAll(".feed-item").forEach((it) => feedObserver.observe(it));
+
+    requestAnimationFrame(() => { scroll.scrollTop = startIdx * scroll.clientHeight; });
+  }
+
+  function closeFeed() {
+    const feed = $("clipFeed");
+    if (feed.hidden) return;
+    feed.hidden = true;
+    if (feedObserver) { feedObserver.disconnect(); feedObserver = null; }
+    $("feedScroll").innerHTML = "";
+    document.body.style.overflow = "";
+  }
+
+  function feedStep(dir) {
+    const scroll = $("feedScroll");
+    scroll.scrollBy({ top: dir * scroll.clientHeight, behavior: "smooth" });
   }
 
   async function loadClips() {
@@ -810,13 +893,19 @@
       loadClips();
     });
 
-    // clips
+    // clips + feed
     $("clipsMoreBtn").addEventListener("click", () => { clipsShown += 18; renderClips(); });
-    $("clipModalClose").addEventListener("click", closeClip);
-    $("clipModal").addEventListener("click", (e) => { if (e.target === $("clipModal")) closeClip(); });
+    $("feedOpenBtn").addEventListener("click", () => openFeed(0));
+    $("feedClose").addEventListener("click", closeFeed);
+    $("feedUp").addEventListener("click", () => feedStep(-1));
+    $("feedDown").addEventListener("click", () => feedStep(1));
 
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") { closeClip(); closeDrawer(); }
+      if (e.key === "Escape") { closeFeed(); closeDrawer(); }
+      if (!$("clipFeed").hidden) {
+        if (e.key === "ArrowDown" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); feedStep(1); }
+        if (e.key === "ArrowUp" || e.key === "PageUp") { e.preventDefault(); feedStep(-1); }
+      }
     });
   }
 

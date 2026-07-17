@@ -20,7 +20,8 @@ Every tile shows the streamer's **Twitch @** in the top-left and the **live view
 
 - **Sort** by viewer count, A→Z, or shuffle.
 - **Roster picker** — watch everyone, only who's live, or hand-pick your lineup (persisted in localStorage).
-- **Dean's List** — scroll down for the most-viewed clips of the week from across all SU channels, playable in-page.
+- **Dean's List** — scroll down for the most-viewed clips of the week from across all SU channels.
+- **Scroll Feed** — watch the clips TikTok-style: full-screen vertical feed, flick (or arrow-key) to snap to the next clip; clicking any clip card drops you into the feed at that clip.
 - Live data (who's live + viewer counts) refreshes every 60 s **without reloading any stream**.
 
 ## Running it
