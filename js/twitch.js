@@ -117,5 +117,25 @@ const TwitchAPI = (() => {
     return clips;
   }
 
-  return { fetchChannels, fetchTopClips };
+  /**
+   * Resolve a clip to a directly playable (signed) MP4 URL, the same way
+   * Twitch's own clip player does. Lets the feed use a native <video>
+   * with full control over sound/looping instead of a sandboxed embed.
+   */
+  async function fetchClipVideo(slug) {
+    const QUERY = `query($slug:ID!){clip(slug:$slug){
+      playbackAccessToken(params:{platform:"web",playerBackend:"mediaplayer",playerType:"clips-embed"}){signature value}
+      videoQualities{quality sourceURL}}}`;
+    const res = await gql({ query: QUERY, variables: { slug } });
+    const clip = res.data && res.data.clip;
+    if (!clip || !clip.playbackAccessToken || !clip.videoQualities || !clip.videoQualities.length) {
+      throw new Error("no playable video for clip " + slug);
+    }
+    const tok = clip.playbackAccessToken;
+    const qs = clip.videoQualities;
+    const pick = qs.find((q) => q.quality === "720") || qs[0];
+    return `${pick.sourceURL}?sig=${encodeURIComponent(tok.signature)}&token=${encodeURIComponent(tok.value)}`;
+  }
+
+  return { fetchChannels, fetchTopClips, fetchClipVideo };
 })();

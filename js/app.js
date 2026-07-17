@@ -200,6 +200,12 @@
     return ih > 0 && iw > 0 ? (ih * iw) / (r.height * r.width) : 0;
   }
 
+  /** Has the user ever interacted with the page? Browsers only allow
+      unmuted playback after that (sticky user activation). */
+  function pageActivated() {
+    return !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
+  }
+
   let lastScrollAt = 0;
   addEventListener("scroll", () => { lastScrollAt = performance.now(); }, { passive: true, capture: true });
   const scrollIdle = () => new Promise((res) => {
@@ -325,6 +331,7 @@
         }
         const entry = { kind: "api", p, tile, login, mountedAt: Date.now(), everPlayed: false };
         players.set(login, entry);
+        if (!muted && opts.mainAudio) setAudio(login); // sync state + gold border
         p.addEventListener(Twitch.Player.PLAYING, () => { entry.everPlayed = true; });
         // Twitch re-evaluates its autoplay requirements on every play()
         // command — refusals are not final. The 5s sweep keeps nudging
@@ -343,6 +350,7 @@
     f.allowFullscreen = true;
     holder.appendChild(f);
     players.set(login, { kind: "iframe", f, holder, tile, login });
+    if (!muted && opts.mainAudio) { state.audioLogin = login; tile.classList.add("has-audio"); }
   }
 
   /** Stage note with a START ALL button that pokes every paused player. */
@@ -626,9 +634,10 @@
     };
 
     // the player mounts once the tile is visible and layout has settled;
-    // it starts muted (browsers veto unmuted autoplay) — 🔊 turns it on
+    // it starts WITH sound when the browser allows it (page already
+    // interacted with), else muted until the first tap anywhere
     barButton(bigTile, { ...AUDIO_ACTION, label: "🔊 SOUND", cls: "audio gold" });
-    armAutoMount(bigTile, focusCh.login, { muted: true });
+    armAutoMount(bigTile, focusCh.login, { muted: !pageActivated(), mainAudio: true });
     renderStrip();
     stage.appendChild(noteWithPlayAll(
       "Press <b>🔊 SOUND</b> on the big screen for audio. Click a side stream (or its <b>◉</b>) to put it on the main screen."));
@@ -700,7 +709,7 @@
     chatWrap.appendChild(chat);
     layout.appendChild(chatWrap);
     stage.appendChild(layout);
-    armAutoMount(t, ch.login, { muted: true });
+    armAutoMount(t, ch.login, { muted: !pageActivated(), mainAudio: true });
 
     stage.appendChild(renderPickStrip(
       (login) => { state.theaterLogin = login; renderStage(); save(); },
@@ -734,7 +743,7 @@
 
     wrap.append(bar, tile);
     stage.appendChild(wrap);
-    armAutoMount(tile, ch0.login, { muted: true });
+    armAutoMount(tile, ch0.login, { muted: !pageActivated(), mainAudio: true });
     stage.appendChild(el("p", "stage-note", "Touring every live channel in your selection, in order. Sit back."));
 
     const updateBar = () => {
@@ -954,12 +963,41 @@
 
   function clipIframe(slug) {
     const f = document.createElement("iframe");
-    // unmuted: allow="autoplay" delegates the page's user activation
-    // (opening the feed was a click), so clips play with sound
     f.src = `https://clips.twitch.tv/embed?clip=${encodeURIComponent(slug)}&parent=${encodeURIComponent(HOST)}&autoplay=true&muted=false`;
     f.allow = "autoplay; fullscreen";
     f.allowFullscreen = true;
     return f;
+  }
+
+  /**
+   * Feed clips play through a native <video> on the clip's actual MP4 —
+   * the embed's player keeps its own muted-start policy we can't reach,
+   * but our own element starts WITH sound (the feed was opened by a
+   * click, so the page has user activation) and loops TikTok-style.
+   * Falls back to the embed if the video URL can't be resolved.
+   */
+  async function mountClip(player) {
+    const slug = player.dataset.slug;
+    try {
+      const url = await TwitchAPI.fetchClipVideo(slug);
+      if (!player.isConnected || player.firstChild) return;
+      const v = document.createElement("video");
+      v.src = url;
+      v.playsInline = true;
+      v.loop = true;
+      v.controls = true;
+      v.autoplay = true;
+      v.muted = false;
+      player.appendChild(v);
+      v.play().catch((err) => {
+        // only fall back to muted when the browser blocked audible play —
+        // muting won't fix a decode error
+        if (err && err.name === "NotAllowedError") { v.muted = true; v.play().catch(() => {}); }
+      });
+    } catch (e) {
+      console.warn("clip video fallback to embed for", slug, e);
+      if (player.isConnected && !player.firstChild) player.appendChild(clipIframe(slug));
+    }
   }
 
   function shuffleArray(arr) {
@@ -1039,7 +1077,7 @@
           scroll.querySelectorAll(".feed-player").forEach((p) => {
             if (p !== player && p.firstChild) p.innerHTML = "";
           });
-          if (!player.querySelector("iframe")) player.appendChild(clipIframe(player.dataset.slug));
+          if (!player.firstChild) mountClip(player);
         })();
       }
     }, { root: scroll, threshold: [0.15, 0.6] });
@@ -1197,6 +1235,25 @@
     document.querySelectorAll(".mode-tab").forEach((x) => x.classList.toggle("active", x.dataset.mode === state.mode));
 
     bindUI();
+
+    // Cold visits can't start with sound (browser rule) — so the first
+    // tap anywhere turns on the current main screen's audio, once.
+    const autoSoundOnFirstTap = () => {
+      setTimeout(() => {
+        if (!$("clipFeed").hidden) return; // feed has its own audio
+        if (state.audioLogin) {
+          document.removeEventListener("pointerdown", autoSoundOnFirstTap, true);
+          return;
+        }
+        const mainTile = document.querySelector(".lecture-grid .tile.main, .theater-layout .tile, .tour-wrap .tile");
+        const login = mainTile && mainTile.dataset.login;
+        if (login && players.has(login)) {
+          setAudio(login);
+          document.removeEventListener("pointerdown", autoSoundOnFirstTap, true);
+        }
+      }, 700); // after the tap's own handlers (mode switches, mounts) run
+    };
+    document.addEventListener("pointerdown", autoSoundOnFirstTap, true);
 
     // wait for fonts + crest so the first layout is stable — Twitch's
     // player refuses autoplay if the page shifts during its checks
