@@ -341,24 +341,46 @@ body {
 }
 .wall-grid.dense { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 
-/* ---- LECTURE HALL ---- */
-.lecture-layout {
+/* Twitch refuses to autoplay embeds smaller than 400x300, so tiles with
+   real video get enough room to qualify; previews stay compact */
+.wall-grid .tile.has-video { grid-column: span 2; aspect-ratio: auto; min-height: 304px; }
+.wall-grid.dense .tile.has-video { grid-column: span 3; }
+
+/* ---- LECTURE HALL: ring around the main screen, one viewport ---- */
+.lecture-grid {
   display: grid;
-  grid-template-columns: 1fr minmax(300px, 26%);
-  grid-auto-rows: min-content;
-  gap: 10px;
+  gap: 8px;
+  height: calc(100vh - 175px);
+  height: calc(100dvh - 175px);
+  min-height: 480px;
 }
-.lecture-main .tile { aspect-ratio: 16 / 9; cursor: default; }
-.lecture-ring {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-  align-content: start;
+.lecture-grid .tile {
+  aspect-ratio: auto;
+  min-height: 0;
+  min-width: 0;
+  height: auto;
 }
-.lecture-ring.cols-2 { grid-template-columns: 1fr 1fr; }
-@media (max-width: 900px) {
-  .lecture-layout { grid-template-columns: 1fr; }
-  .lecture-ring, .lecture-ring.cols-2 { grid-template-columns: 1fr 1fr; }
+.lecture-grid .tile.main { grid-area: m; cursor: default; }
+
+.lecture-grid.ring-4 {
+  grid-template-columns: 1fr 2.9fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas: "a m b" "c m d";
+}
+.lecture-grid.ring-6 {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 1fr 2.9fr 1fr;
+  grid-template-areas: "a b c" "m m m" "d e f";
+}
+.lecture-grid.ring-8 {
+  grid-template-columns: 1fr 2.7fr 1fr;
+  grid-template-rows: 1fr 2.7fr 1fr;
+  grid-template-areas: "a b c" "d m e" "f g h";
+}
+.lecture-grid.ring-12 {
+  grid-template-columns: 1fr 1.85fr 1.85fr 1fr;
+  grid-template-rows: 1fr 1.85fr 1.85fr 1fr;
+  grid-template-areas: "a b c d" "e m m f" "g m m h" "i j k l";
 }
 
 /* ---- STUDY GROUP (quad) ---- */
@@ -459,6 +481,22 @@ body {
   padding: 8px 2px 2px;
 }
 .stage-note b { color: var(--gold-bright); font-weight: 600; }
+
+.btn-mini {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--gold-bright);
+  background: transparent;
+  border: 1px solid var(--gold);
+  border-radius: 3px;
+  padding: 3px 9px;
+  margin-left: 8px;
+  cursor: pointer;
+  vertical-align: 1px;
+}
+.btn-mini:hover { background: var(--maroon-deep); color: var(--parchment); }
 
 /* ============ CLIPS ============ */
 .clips-section {
@@ -934,10 +972,25 @@ body {
 
   /* wall: playing streams get the full width, previews stay 2-up */
   .wall-grid, .wall-grid.dense { grid-template-columns: 1fr 1fr; gap: 6px; }
-  .wall-grid .tile.has-video { grid-column: 1 / -1; }
+  .wall-grid .tile.has-video, .wall-grid.dense .tile.has-video {
+    grid-column: 1 / -1;
+    aspect-ratio: 16 / 9;
+    min-height: 0;
+  }
   .tile .chip { font-size: 10.5px; padding: 2px 6px; }
 
-  .lecture-layout { gap: 6px; }
+  /* lecture: no room for a ring — main on top, smalls 2-up below */
+  .lecture-grid, .lecture-grid.ring-4, .lecture-grid.ring-6,
+  .lecture-grid.ring-8, .lecture-grid.ring-12 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: none;
+    grid-template-areas: none;
+    height: auto;
+    min-height: 0;
+    gap: 6px;
+  }
+  .lecture-grid .tile { grid-area: auto !important; aspect-ratio: 16 / 9; }
+  .lecture-grid .tile.main { grid-column: 1 / -1; order: -1; }
   .quad-grid { gap: 6px; }
   .theater-chat iframe { min-height: 320px; }
   .stage-note { font-size: 10px; }

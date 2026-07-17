@@ -18,7 +18,7 @@
     mode: "wall",
     sort: "viewers",
     videoCap: 9,             // wall: how many tiles get real video
-    ringSize: 6,             // lecture: small tiles around the big one
+    ringSize: 8,             // lecture: small tiles around the big one
     tourSpeed: 30,
     focusLogin: null,        // lecture big tile
     quadLogins: [],
@@ -227,6 +227,15 @@
     players.set(login, { kind: "iframe", f, holder, tile, login });
   }
 
+  /** Stage note with a START ALL button that pokes every paused player. */
+  function noteWithPlayAll(html) {
+    const p = el("p", "stage-note", html + ' <button class="btn-mini" type="button">▶ START ALL</button>');
+    p.querySelector("button").addEventListener("click", () => {
+      for (const entry of players.values()) tryPlay(entry);
+    });
+    return p;
+  }
+
   function entryPaused(entry) {
     try { return entry.kind === "api" && entry.p.isPaused(); } catch (e) { return false; }
   }
@@ -366,7 +375,7 @@
     if (!live.length && !offline.length) {
       stage.appendChild(el("p", "stage-note", "Nobody selected — open the <b>ROSTER</b> and pick your streamers."));
     } else {
-      stage.appendChild(el("p", "stage-note",
+      stage.appendChild(noteWithPlayAll(
         `<b>${live.length}</b> live · top <b>${Math.min(state.videoCap, live.length)}</b> playing video, the rest are live previews (click any to start video · click a playing tile for sound)`));
     }
   }
@@ -397,18 +406,21 @@
     }
     const ring = live.filter((c) => c.login !== state.focusLogin).slice(0, state.ringSize);
 
-    const layout = el("div", "lecture-layout");
-    const mainWrap = el("div", "lecture-main");
+    // ring surrounds the main screen, everything on one viewport
+    const AREAS = "abcdefghijkl";
+    const grid = el("div", `lecture-grid ring-${state.ringSize}`);
+    stage.appendChild(grid); // attach first: players must mount into the live DOM
+
     const focusCh = state.byLogin.get(state.focusLogin);
     const bigTile = makeTile(focusCh);
-    bigTile.classList.add("has-audio");
-    mainWrap.appendChild(bigTile);
+    bigTile.classList.add("main", "has-audio");
+    grid.appendChild(bigTile);
 
-    const ringWrap = el("div", "lecture-ring" + (state.ringSize > 6 ? " cols-2" : ""));
     const ringTiles = [];
-    for (const ch of ring) {
+    ring.forEach((ch, i) => {
       const t = makeTile(ch, { hint: "CLICK · SWAP TO MAIN", shield: true });
-      ringWrap.appendChild(t);
+      t.style.gridArea = AREAS[i];
+      grid.appendChild(t);
       ringTiles.push([t, ch]);
       t.addEventListener("click", () => {
         const oldBig = bigTile.dataset.login;
@@ -425,10 +437,7 @@
         renderStrip();
         save();
       });
-    }
-
-    layout.appendChild(mainWrap);
-    layout.appendChild(ringWrap);
+    });
 
     let stripEl = null;
     const renderStrip = () => {
@@ -440,14 +449,13 @@
       stripEl = s;
     };
 
-    stage.appendChild(layout);
-    // players mount only after the layout is in the document
+    // players mount only after the grid is in the document
     mountPlayer(bigTile, focusCh.login, { muted: false });
     state.audioLogin = focusCh.login;
     for (const [t, ch] of ringTiles) mountPlayer(t, ch.login, { muted: true, maxHeight: 480 });
     renderStrip();
-    stage.appendChild(el("p", "stage-note",
-      "Big screen carries the <b>audio</b>. Click a small tile to swap it into the main slot, or pick from the strip below."));
+    stage.appendChild(noteWithPlayAll(
+      "Big screen carries the <b>audio</b>. Click a small tile to swap it into the main slot."));
   }
 
   function refreshTileChips(tile, ch) {
