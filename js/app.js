@@ -553,6 +553,52 @@
     return strip;
   }
 
+  /**
+   * Solve the lecture grid's column widths in px so the main column's
+   * height EXACTLY equals the side stacks (the fixed ratios can't do
+   * this — every small tile's label bar adds height, so the sides end
+   * up taller and the main floats with space above/below). The main
+   * must be n·s + (n-1)·(barH+gap)/(9/16) wide to match n stacked
+   * side tiles of width s.
+   */
+  function layoutLecture(grid) {
+    if (innerWidth <= 640) {
+      grid.style.gridTemplateColumns = "";
+      grid.style.width = "";
+      grid.style.maxWidth = "";
+      return;
+    }
+    const cfgMap = {
+      "3c": { perCol: 3, sideCols: 1, chat: true, build: (s, m, c) => `${s}px ${m}px ${c}px` },
+      "4":  { perCol: 2, sideCols: 2, build: (s, m) => `${s}px ${m}px ${s}px` },
+      "6":  { perCol: 3, sideCols: 2, build: (s, m) => `${s}px ${m}px ${s}px` },
+      "8":  { perCol: 4, sideCols: 2, build: (s, m) => `${s}px ${m}px ${s}px` },
+      "12": { perCol: 3, sideCols: 4, build: (s, m) => `${s}px ${s}px ${m}px ${s}px ${s}px` },
+    };
+    const cfg = cfgMap[state.ringSize];
+    if (!cfg) return;
+    const fs = document.body.classList.contains("fs-mode");
+    const gap = 8, R = 9 / 16;
+    const W = stage.clientWidth - (fs ? 20 : 32);
+    const H = innerHeight - (fs ? 84 : 200);
+    const bar = grid.querySelector(".tile-bar");
+    const barH = bar ? bar.offsetHeight : 29;
+    const n = cfg.perCol;
+    const K = ((n - 1) * (barH + gap)) / R; // extra main width that offsets the sides' bars+gaps
+    const chatW = cfg.chat ? Math.max(260, Math.min(0.22 * W, 400)) : 0;
+    const colCount = cfg.sideCols + 1 + (cfg.chat ? 1 : 0);
+    const gapsTotal = (colCount - 1) * gap;
+    let s = (W - chatW - gapsTotal - K) / (cfg.sideCols + n);
+    let m = n * s + K;
+    const mMax = (H - barH) / R; // don't exceed the viewport height
+    if (m > mMax) { m = mMax; s = (m - K) / n; }
+    if (s < 120) { s = 120; m = n * s + K; }
+    const used = cfg.sideCols * s + m + chatW + gapsTotal;
+    grid.style.maxWidth = "none";
+    grid.style.width = Math.round(used) + "px";
+    grid.style.gridTemplateColumns = cfg.build(Math.round(s), Math.round(m), Math.round(chatW));
+  }
+
   // ---------- mode: LECTURE HALL ----------
   function renderLecture() {
     const live = liveSelected();
@@ -637,6 +683,8 @@
       armAutoMount(t, ch.login, { muted: true, maxHeight: 360, zoomFit: true });
       tileMedia(t).addEventListener("click", () => doSwap(t));
     });
+
+    requestAnimationFrame(() => layoutLecture(grid));
 
     let stripEl = null;
     const renderStrip = () => {
@@ -891,6 +939,18 @@
       liveEl.textContent = ch.live ? "● " + (state.apiOK ? fmtViewers(ch.viewers) : "LIVE") : "offline";
     });
   }
+
+  // Twitch pauses muted players in background tabs (bandwidth saving —
+  // not preventable). Resume everything that had been playing as soon
+  // as the tab is visible again.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    setTimeout(() => {
+      for (const entry of players.values()) {
+        if (entry.kind === "api" && entry.everPlayed && entryPaused(entry)) tryPlay(entry);
+      }
+    }, 400);
+  });
 
   // ---------- preview auto-refresh (the control-room effect) ----------
   setInterval(() => {
@@ -1204,7 +1264,16 @@
     });
 
     // fullscreen mode: just the streams under a scoreboard banner
-    const setFsMode = (on) => document.body.classList.toggle("fs-mode", on);
+    const relayout = () => {
+      const g = document.querySelector(".lecture-grid");
+      if (g) layoutLecture(g);
+    };
+    const setFsMode = (on) => {
+      document.body.classList.toggle("fs-mode", on);
+      requestAnimationFrame(relayout);
+    };
+    let resizeT = null;
+    addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(relayout, 120); });
     $("fsBtn").addEventListener("click", () => {
       const root = document.documentElement;
       if (root.requestFullscreen) {

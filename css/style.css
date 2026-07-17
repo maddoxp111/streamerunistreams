@@ -707,7 +707,7 @@ body.fs-mode .fs-banner {
   gap: 3%;
   flex: 1 1 auto;
   min-height: 54px;
-  max-height: 24vh;
+  max-height: 30vh;
   container-type: size;
   position: relative;
   background:
@@ -769,7 +769,7 @@ body.fs-mode .stage {
   overflow-y: auto;
   width: 100%;
   max-width: none;
-  margin: 0;
+  margin: auto 0; /* any slack beyond the banner's cap centers the streams */
   padding: 10px;
   min-height: 0;
 }
