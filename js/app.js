@@ -166,6 +166,10 @@
    * Mount a live player for `login` inside tile element. Uses the Twitch
    * JS embed (mute/quality/channel control without reloads) when available,
    * plain iframe otherwise.
+   *
+   * IMPORTANT: the tile must already be attached to the document — the
+   * Twitch embed library resolves its target element by id and throws on
+   * detached nodes. We fall back to a plain iframe if it throws anyway.
    */
   function mountPlayer(tile, login, { muted = true, maxHeight = 0 } = {}) {
     const holder = el("div");
@@ -173,31 +177,35 @@
     holder.style.cssText = "position:absolute;inset:0;";
     tile.appendChild(holder);
 
-    if (embedReady) {
-      const p = new Twitch.Player(holder.id, {
-        channel: login,
-        parent: [HOST],
-        width: "100%",
-        height: "100%",
-        muted,
-        autoplay: true,
-      });
-      if (maxHeight) {
-        let done = false;
-        p.addEventListener(Twitch.Player.PLAYING, () => {
-          if (done) return; done = true;
-          setTimeout(() => capQuality(p, maxHeight), 800);
+    if (embedReady && holder.isConnected) {
+      try {
+        const p = new Twitch.Player(holder.id, {
+          channel: login,
+          parent: [HOST],
+          width: "100%",
+          height: "100%",
+          muted,
+          autoplay: true,
         });
+        if (maxHeight) {
+          let done = false;
+          p.addEventListener(Twitch.Player.PLAYING, () => {
+            if (done) return; done = true;
+            setTimeout(() => capQuality(p, maxHeight), 800);
+          });
+        }
+        players.set(login, { kind: "api", p, tile, login });
+        return;
+      } catch (e) {
+        console.warn("Twitch.Player failed for", login, "— falling back to iframe", e);
       }
-      players.set(login, { kind: "api", p, tile, login });
-    } else {
-      const f = document.createElement("iframe");
-      f.src = `https://player.twitch.tv/?channel=${encodeURIComponent(login)}&parent=${encodeURIComponent(HOST)}&muted=${muted}&autoplay=true`;
-      f.allow = "autoplay; fullscreen";
-      f.allowFullscreen = true;
-      holder.appendChild(f);
-      players.set(login, { kind: "iframe", f, holder, tile, login });
     }
+    const f = document.createElement("iframe");
+    f.src = iframeSrc(login, muted);
+    f.allow = "autoplay; fullscreen";
+    f.allowFullscreen = true;
+    holder.appendChild(f);
+    players.set(login, { kind: "iframe", f, holder, tile, login });
   }
 
   function setAudio(login) {
@@ -266,11 +274,14 @@
     return `<span class="chip handle">@${ch.login}</span><span class="chip viewers" data-viewers="${ch.login}">${v}</span>`;
   }
 
-  function makeTile(ch, { hint = "" } = {}) {
+  function makeTile(ch, { hint = "", shield = false } = {}) {
     const tile = el("div", "tile" + (ch.live ? "" : " offline"));
     tile.dataset.login = ch.login;
     tile.innerHTML = chipHTML(ch);
     if (hint) tile.appendChild(el("span", "hint", hint));
+    // player iframes swallow clicks — small tiles get a transparent shield
+    // above the player so click-to-sound / click-to-swap keeps working
+    if (shield) tile.appendChild(el("div", "click-shield"));
     tile.title = ch.title ? `${ch.displayName} — ${ch.title}` : ch.displayName;
     return tile;
   }
@@ -296,10 +307,12 @@
     const offline = sortChannels(selectedChannels().filter((c) => !c.live))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
     const grid = el("div", "wall-grid" + (live.length + offline.length > 40 ? " dense" : ""));
+    stage.appendChild(grid); // attach first: players must mount into the live DOM
 
     live.forEach((ch, i) => {
       const withVideo = i < state.videoCap;
-      const tile = makeTile(ch, { hint: withVideo ? "CLICK · SOUND" : "CLICK · PLAY" });
+      const tile = makeTile(ch, { hint: withVideo ? "CLICK · SOUND" : "CLICK · PLAY", shield: true });
+      grid.appendChild(tile);
       if (withVideo) {
         mountPlayer(tile, ch.login, { muted: true, maxHeight: 480 });
       } else {
@@ -307,14 +320,13 @@
       }
       tile.addEventListener("click", () => {
         if (players.has(ch.login)) {
-          setAudio(ch.login);
+          setAudio(state.audioLogin === ch.login ? null : ch.login);
         } else {
           tile.querySelectorAll(".preview, .badge-offline").forEach((n) => n.remove());
           mountPlayer(tile, ch.login, { muted: true, maxHeight: 480 });
           tile.querySelector(".hint").textContent = "CLICK · SOUND";
         }
       });
-      grid.appendChild(tile);
     });
 
     offline.forEach((ch) => {
@@ -322,8 +334,6 @@
       addPreview(tile, ch);
       grid.appendChild(tile);
     });
-
-    stage.appendChild(grid);
 
     if (!live.length && !offline.length) {
       stage.appendChild(el("p", "stage-note", "Nobody selected — open the <b>ROSTER</b> and pick your streamers."));
@@ -363,15 +373,15 @@
     const mainWrap = el("div", "lecture-main");
     const focusCh = state.byLogin.get(state.focusLogin);
     const bigTile = makeTile(focusCh);
-    mountPlayer(bigTile, focusCh.login, { muted: false });
     bigTile.classList.add("has-audio");
-    state.audioLogin = focusCh.login;
     mainWrap.appendChild(bigTile);
 
     const ringWrap = el("div", "lecture-ring" + (state.ringSize > 6 ? " cols-2" : ""));
+    const ringTiles = [];
     for (const ch of ring) {
-      const t = makeTile(ch, { hint: "CLICK · SWAP TO MAIN" });
-      mountPlayer(t, ch.login, { muted: true, maxHeight: 480 });
+      const t = makeTile(ch, { hint: "CLICK · SWAP TO MAIN", shield: true });
+      ringWrap.appendChild(t);
+      ringTiles.push([t, ch]);
       t.addEventListener("click", () => {
         const oldBig = bigTile.dataset.login;
         const promote = t.dataset.login; // channel currently in this small tile
@@ -385,7 +395,6 @@
         renderStrip();
         save();
       });
-      ringWrap.appendChild(t);
     }
 
     layout.appendChild(mainWrap);
@@ -402,6 +411,10 @@
     };
 
     stage.appendChild(layout);
+    // players mount only after the layout is in the document
+    mountPlayer(bigTile, focusCh.login, { muted: false });
+    state.audioLogin = focusCh.login;
+    for (const [t, ch] of ringTiles) mountPlayer(t, ch.login, { muted: true, maxHeight: 480 });
     renderStrip();
     stage.appendChild(el("p", "stage-note",
       "Big screen carries the <b>audio</b>. Click a small tile to swap it into the main slot, or pick from the strip below."));
@@ -430,15 +443,15 @@
     }
 
     const grid = el("div", "quad-grid");
+    stage.appendChild(grid); // attach first: players must mount into the live DOM
     state.quadLogins.forEach((login, i) => {
       const ch = state.byLogin.get(login);
-      const t = makeTile(ch, { hint: "CLICK · SOUND" });
+      const t = makeTile(ch, { hint: "CLICK · SOUND", shield: true });
+      grid.appendChild(t);
       mountPlayer(t, login, { muted: i !== 0 });
       if (i === 0) { t.classList.add("has-audio"); state.audioLogin = login; }
-      t.addEventListener("click", () => setAudio(login));
-      grid.appendChild(t);
+      t.addEventListener("click", () => setAudio(state.audioLogin === login ? null : login));
     });
-    stage.appendChild(grid);
 
     stage.appendChild(renderPickStrip(
       (login) => {
@@ -467,9 +480,7 @@
 
     const layout = el("div", "theater-layout");
     const t = makeTile(ch);
-    mountPlayer(t, ch.login, { muted: false });
     t.classList.add("has-audio");
-    state.audioLogin = ch.login;
     layout.appendChild(t);
 
     const chatWrap = el("div", "theater-chat");
@@ -478,6 +489,8 @@
     chatWrap.appendChild(chat);
     layout.appendChild(chatWrap);
     stage.appendChild(layout);
+    mountPlayer(t, ch.login, { muted: false });
+    state.audioLogin = ch.login;
 
     stage.appendChild(renderPickStrip(
       (login) => { state.theaterLogin = login; renderStage(); save(); },
@@ -509,11 +522,11 @@
     const ch0 = live[tourIndex];
     const tile = makeTile(ch0);
     tile.classList.add("has-audio");
-    mountPlayer(tile, ch0.login, { muted: false });
-    state.audioLogin = ch0.login;
 
     wrap.append(bar, tile);
     stage.appendChild(wrap);
+    mountPlayer(tile, ch0.login, { muted: false });
+    state.audioLogin = ch0.login;
     stage.appendChild(el("p", "stage-note", "Touring every live channel in your selection, in order. Sit back."));
 
     const updateBar = () => {
@@ -566,13 +579,20 @@
     $("ringSizeCtl").hidden = state.mode !== "lecture";
     $("tourSpeedCtl").hidden = state.mode !== "shuffle";
 
-    ({
-      wall: renderWall,
-      lecture: renderLecture,
-      quad: renderQuad,
-      theater: renderTheater,
-      shuffle: renderTour,
-    }[state.mode] || renderWall)();
+    try {
+      ({
+        wall: renderWall,
+        lecture: renderLecture,
+        quad: renderQuad,
+        theater: renderTheater,
+        shuffle: renderTour,
+      }[state.mode] || renderWall)();
+    } catch (e) {
+      // never leave the stage blank — whatever happens, say so
+      console.error("renderStage failed", e);
+      stage.appendChild(el("p", "stage-note",
+        "Something went wrong rendering this view — try another mode or refresh. (" + (e && e.message || e) + ")"));
+    }
   }
 
   // ---------- live data ----------

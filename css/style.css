@@ -305,6 +305,15 @@ body {
   pointer-events: none;
 }
 
+/* transparent layer above small-tile players so clicks reach the tile,
+   not the embedded iframe (big/main players don't get one) */
+.tile .click-shield {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  cursor: pointer;
+}
+
 /* hover action hint */
 .tile .hint {
   position: absolute;
