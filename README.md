@@ -2,6 +2,8 @@
 
 An unofficial fan-made multiview for **Streamer University** — every SU streamer's Twitch stream on one page, control-room style, with live viewer counts and the top clips from across campus.
 
+**Roster:** the full Class of 2026 (Hendrix College edition) — Kai Cenat + 24 faculty/staff + all 120 students, every Twitch login verified. The Class of '25 (Akron) alumni can be added from the roster drawer.
+
 ## Modes
 
 | Mode | What it does |

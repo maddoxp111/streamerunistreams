@@ -7,7 +7,7 @@
 <meta name="description" content="Watch every Streamer University stream at once — control room wall, focus mode, quad view, and the top clips from across campus.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Graduate&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Graduate&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Oswald:wght@400;500;600;700&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="assets/crest.svg" type="image/svg+xml">
 </head>
@@ -20,7 +20,7 @@
       <img src="assets/crest.svg" alt="Streamer University crest" class="crest">
       <div class="brand-text">
         <h1>Streamer <span>University</span></h1>
-        <p class="motto">EST. MMXXV &nbsp;·&nbsp; <em>Chattus Numquam Dormit</em> &nbsp;·&nbsp; UNOFFICIAL MULTIVIEW</p>
+        <p class="motto">CLASS OF 2026 &nbsp;·&nbsp; <em>Chattus Numquam Dormit</em> &nbsp;·&nbsp; UNOFFICIAL MULTIVIEW</p>
       </div>
     </div>
     <div class="campus-stats" id="campusStats">
@@ -157,6 +157,10 @@
       <button id="rosterNone">NONE</button>
       <button id="rosterLive">LIVE ONLY</button>
     </div>
+    <label class="alumni-toggle">
+      <input type="checkbox" id="alumniToggle">
+      <span>Include Class of &rsquo;25 alumni <em>(Akron edition)</em></span>
+    </label>
   </div>
   <div class="drawer-list" id="rosterList"></div>
 </aside>

@@ -4,12 +4,12 @@
    ============================================================ */
 
 :root {
-  --maroon: #6b1225;
-  --maroon-deep: #4a0c1a;
-  --maroon-glow: #9c1f3c;
-  --gold: #c9a24b;
+  --maroon: #7c1a2f;
+  --maroon-deep: #521021;
+  --maroon-glow: #a3243f;
+  --gold: #c6a050;
   --gold-bright: #e3c46e;
-  --parchment: #e8d9a8;
+  --parchment: #ecda9f;
   --ink: #0c0c10;
   --ink-2: #131318;
   --ink-3: #1b1b22;
@@ -61,7 +61,7 @@ body {
 
 .brand { display: flex; align-items: center; gap: 18px; }
 
-.crest { width: 64px; height: 74px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
+.crest { width: 68px; height: auto; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
 
 .brand-text h1 {
   font-family: var(--varsity);
@@ -228,7 +228,7 @@ body {
   gap: 18px;
   padding: 90px 0;
 }
-.loading-crest img { width: 72px; animation: pulse 1.6s ease-in-out infinite; }
+.loading-crest img, .loading-crest svg { width: 82px; height: auto; animation: pulse 1.6s ease-in-out infinite; }
 .loading p { font-family: var(--varsity); letter-spacing: 4px; color: var(--gold); font-size: 14px; }
 @keyframes pulse { 0%,100% { opacity: 0.5; transform: scale(1);} 50% { opacity: 1; transform: scale(1.06);} }
 
@@ -693,6 +693,34 @@ body {
   letter-spacing: 1px;
 }
 .roster-row .rr-live.off { color: #555; }
+.rr-role {
+  margin-left: 8px;
+  font-family: var(--sans);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--gold);
+  padding: 2px 6px;
+  border-radius: 3px;
+  vertical-align: 2px;
+}
+.rr-role.alum { background: var(--ink-3); color: var(--text-dim); border: 1px solid var(--line); }
+
+.alumni-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--sans);
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.alumni-toggle input { accent-color: var(--maroon-glow); width: 15px; height: 15px; }
+.alumni-toggle em { font-style: normal; opacity: 0.6; }
+.alumni-toggle:hover span { color: var(--text); }
 
 /* ============ CLIP MODAL ============ */
 .modal-overlay { display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 110; }

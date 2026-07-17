@@ -24,9 +24,22 @@
     quadLogins: [],
     theaterLogin: null,
     audioLogin: null,
+    includeAlumni: false,
     apiOK: true,
     randomSeed: Math.random(),
   };
+
+  /** Class of '26 always; class of '25 alumni when toggled on. */
+  function activeRoster() {
+    const out = ROSTER_2026.slice();
+    if (state.includeAlumni) {
+      const seen = new Set(out.map((r) => r.login));
+      for (const r of ROSTER_2025) {
+        if (!seen.has(r.login)) out.push({ ...r, alum: true });
+      }
+    }
+    return out;
+  }
 
   const players = new Map(); // login -> Twitch.Player or iframe element
   let embedReady = false;
@@ -100,6 +113,7 @@
         selected: allSelected ? "ALL" : [...state.selected],
         mode: state.mode, sort: state.sort, videoCap: state.videoCap,
         ringSize: state.ringSize, tourSpeed: state.tourSpeed,
+        includeAlumni: state.includeAlumni,
       }));
     } catch (e) { /* private mode etc. */ }
   }
@@ -112,6 +126,7 @@
       if (p.videoCap != null) state.videoCap = +p.videoCap;
       if (p.ringSize) state.ringSize = +p.ringSize;
       if (p.tourSpeed) state.tourSpeed = +p.tourSpeed;
+      state.includeAlumni = !!p.includeAlumni;
       return p.selected;
     } catch (e) { return null; }
   }
@@ -562,24 +577,25 @@
 
   // ---------- live data ----------
   async function refreshData(first = false) {
+    const roster = activeRoster();
     try {
-      const map = await TwitchAPI.fetchChannels(ROSTER.map((r) => r.login));
+      const map = await TwitchAPI.fetchChannels(roster.map((r) => r.login));
       state.apiOK = true;
       $("apiNotice").hidden = true;
-      state.channels = ROSTER.map((r) => {
+      state.channels = roster.map((r) => {
         const d = map.get(r.login);
         return d
-          ? { ...d, name: r.name }
-          : { login: r.login, name: r.name, displayName: r.name, avatar: "", live: false, viewers: 0, game: "", title: "" };
+          ? { ...d, name: r.name, role: r.role, alum: r.alum }
+          : { login: r.login, name: r.name, displayName: r.name, avatar: "", live: false, viewers: 0, game: "", title: "", role: r.role, alum: r.alum };
       });
     } catch (e) {
       console.warn("Twitch data fetch failed", e);
       state.apiOK = false;
       $("apiNotice").hidden = false;
-      if (!state.channels.length) {
-        state.channels = ROSTER.map((r) => ({
+      if (!state.channels.length || state.channels.length !== roster.length) {
+        state.channels = roster.map((r) => ({
           login: r.login, name: r.name, displayName: r.name,
-          avatar: "", live: true, viewers: 0, game: "", title: "",
+          avatar: "", live: true, viewers: 0, game: "", title: "", role: r.role, alum: r.alum,
         }));
       }
     }
@@ -627,11 +643,12 @@
     list.innerHTML = "";
     for (const ch of chans) {
       if (f && !ch.login.includes(f) && !ch.displayName.toLowerCase().includes(f)) continue;
+      const tag = ch.role ? `<span class="rr-role">${ch.role}</span>` : ch.alum ? `<span class="rr-role alum">Class of '25</span>` : "";
       const row = el("label", "roster-row");
       row.innerHTML = `
         <input type="checkbox" ${state.selected.has(ch.login) ? "checked" : ""}>
         <img src="${ch.avatar || ""}" alt="" onerror="this.style.visibility='hidden'">
-        <span><span class="rr-name">${ch.displayName}</span><br><span class="rr-login">@${ch.login}</span></span>
+        <span><span class="rr-name">${ch.displayName}</span>${tag}<br><span class="rr-login">@${ch.login}</span></span>
         <span class="rr-live ${ch.live ? "" : "off"}">${ch.live ? "● " + (state.apiOK ? fmtViewers(ch.viewers) : "LIVE") : "offline"}</span>`;
       row.querySelector("input").addEventListener("change", (e) => {
         if (e.target.checked) state.selected.add(ch.login);
@@ -698,13 +715,15 @@
   }
 
   async function loadClips() {
+    const cacheKey = "su_clips_v3_" + (state.includeAlumni ? "all" : "26");
     try {
-      const cached = JSON.parse(sessionStorage.getItem("su_clips_v2") || "null");
+      const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
       if (cached && Date.now() - cached.t < 15 * 60 * 1000 && cached.clips.length) {
         allClips = cached.clips;
       } else {
-        allClips = await TwitchAPI.fetchTopClips(ROSTER.map((r) => r.login), 5);
-        try { sessionStorage.setItem("su_clips_v2", JSON.stringify({ t: Date.now(), clips: allClips.slice(0, 400) })); } catch (e) {}
+        $("clipsGrid").innerHTML = '<p class="clips-loading">Grading submissions…</p>';
+        allClips = await TwitchAPI.fetchTopClips(activeRoster().map((r) => r.login), 5);
+        try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), clips: allClips.slice(0, 400) })); } catch (e) {}
       }
       // keep it varied: max 3 clips per channel in the visible list
       const perChan = new Map();
@@ -756,6 +775,20 @@
       state.selected = new Set(state.channels.filter((c) => c.live).map((c) => c.login));
       renderRosterList($("rosterSearch").value); onSelectionChanged();
     });
+    $("alumniToggle").addEventListener("change", async (e) => {
+      state.includeAlumni = e.target.checked;
+      const before = new Set(state.channels.map((c) => c.login));
+      await refreshData(true);
+      if (state.includeAlumni) {
+        for (const c of state.channels) if (!before.has(c.login)) state.selected.add(c.login);
+      } else {
+        const now = new Set(state.channels.map((c) => c.login));
+        state.selected = new Set([...state.selected].filter((l) => now.has(l)));
+      }
+      renderRosterList($("rosterSearch").value);
+      onSelectionChanged();
+      loadClips();
+    });
 
     // clips
     $("clipsMoreBtn").addEventListener("click", () => { clipsShown += 18; renderClips(); });
@@ -767,9 +800,28 @@
     });
   }
 
+  /* Inline the crest SVGs so the blackletter webfont applies to the S/U
+     (fonts never load inside <img>-embedded SVGs). */
+  async function inlineCrests() {
+    try {
+      const svg = await (await fetch("assets/crest.svg")).text();
+      document.querySelectorAll('img[src$="crest.svg"]').forEach((img) => {
+        const span = document.createElement("span");
+        span.innerHTML = svg;
+        const s = span.querySelector("svg");
+        if (!s) return;
+        if (img.className) s.setAttribute("class", img.className);
+        s.removeAttribute("width");
+        s.removeAttribute("height");
+        img.replaceWith(s);
+      });
+    } catch (e) { /* keep the <img> fallback */ }
+  }
+
   // ---------- boot ----------
   async function boot() {
     if (IS_FILE) $("fileNotice").hidden = false;
+    inlineCrests();
 
     const savedSelected = load();
 
@@ -778,6 +830,7 @@
     $("videoCapSelect").value = String(state.videoCap);
     $("ringSizeSelect").value = String(state.ringSize);
     $("tourSpeedSelect").value = String(state.tourSpeed);
+    $("alumniToggle").checked = state.includeAlumni;
     document.querySelectorAll(".mode-tab").forEach((x) => x.classList.toggle("active", x.dataset.mode === state.mode));
 
     bindUI();
