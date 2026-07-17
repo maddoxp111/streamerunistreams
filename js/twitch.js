@@ -34,6 +34,7 @@ const TwitchAPI = (() => {
     const QUERY = `query($logins:[String!]!){
       users(logins:$logins){
         id login displayName profileImageURL(width:70)
+        followers{ totalCount }
         broadcastSettings{ title }
         stream{ id viewersCount game{ displayName } }
       }
@@ -52,6 +53,7 @@ const TwitchAPI = (() => {
           displayName: u.displayName || u.login,
           avatar: u.profileImageURL || "",
           live: !!u.stream,
+          followers: (u.followers && u.followers.totalCount) || 0,
           viewers: u.stream ? u.stream.viewersCount || 0 : 0,
           game: u.stream && u.stream.game ? u.stream.game.displayName : "",
           title: (u.broadcastSettings && u.broadcastSettings.title) || "",

@@ -777,11 +777,10 @@ body.fs-mode .stage {
 .fs-ticker { display: none; }
 body.fs-mode .fs-ticker {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3.5%;
+  flex-direction: column;
+  align-items: stretch;
   flex: 1 1 0;
-  min-height: 44px;
+  min-height: 60px;
   max-height: 30vh;
   container-type: size;
   overflow: hidden;
@@ -790,34 +789,77 @@ body.fs-mode .fs-ticker {
     linear-gradient(0deg, var(--maroon), var(--maroon-deep));
   border-top: 2px solid var(--gold);
 }
-body.fs-mode .fs-ticker .ft-label {
-  font-family: var(--sans);
-  font-size: clamp(8px, 14cqh, 18px);
-  letter-spacing: 0.3em;
-  color: rgba(232, 217, 168, 0.65);
-  white-space: nowrap;
-}
-body.fs-mode .fs-ticker .ft-item {
+
+body.fs-mode .ft-row {
+  position: relative;
+  flex: 1;
   display: flex;
+  align-items: center;
+  overflow: hidden;
+  min-height: 0;
+  border-top: 1px solid rgba(201, 162, 75, 0.22);
+}
+body.fs-mode .ft-row:first-child { border-top: none; }
+
+body.fs-mode .ft-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  padding: 0 2.4em 0 14px;
+  background: linear-gradient(90deg, var(--maroon-deep) 78%, var(--maroon-deep) 84%, transparent);
+  font-family: var(--varsity);
+  font-size: clamp(7px, 9cqh, 15px);
+  letter-spacing: 0.22em;
+  color: var(--gold);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+body.fs-mode .ft-scroll {
+  display: flex;
+  white-space: nowrap;
+  will-change: transform;
+  animation: ft-marquee var(--dur, 40s) linear infinite;
+}
+@keyframes ft-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+body.fs-mode .ft-seg {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2.2em;
+  padding-right: 2.2em;
+}
+body.fs-mode .ft-sep { color: rgba(201, 162, 75, 0.5); }
+
+body.fs-mode .ft-item {
+  display: inline-flex;
   align-items: baseline;
   gap: 0.45em;
   font-family: var(--sans);
-  font-size: clamp(10px, 22cqh, 30px);
+  font-size: clamp(9px, 15cqh, 24px);
   font-weight: 600;
   color: var(--parchment);
   white-space: nowrap;
 }
-body.fs-mode .fs-ticker .ft-item b {
+body.fs-mode .ft-item b {
   font-family: var(--varsity);
   font-weight: 400;
   color: var(--gold);
   font-size: 0.8em;
 }
-body.fs-mode .fs-ticker .ft-item i {
+body.fs-mode .ft-item i {
   font-style: normal;
   color: var(--gold-bright);
   font-size: 0.85em;
 }
+body.fs-mode .ft-subs .ft-item { color: #fff; }
+body.fs-mode .ft-followers .ft-item { color: rgba(233, 230, 221, 0.75); }
 
 /* stream layouts get the whole viewport minus a slim banner — the
    flexing banner soaks up whatever they don't use */

@@ -907,11 +907,6 @@
     $("statViewers").textContent = state.apiOK ? fmtViewers(liveAll.reduce((s, c) => s + (c.viewers || 0), 0)) : "?";
     $("fsLive").textContent = $("statLive").textContent;
     $("fsViewers").textContent = $("statViewers").textContent;
-    if (state.apiOK) {
-      const top5 = liveAll.slice().sort((a, b) => (b.viewers || 0) - (a.viewers || 0)).slice(0, 5);
-      $("fsTicker").innerHTML = '<span class="ft-label">TOP OF THE CLASS</span>' +
-        top5.map((c, i) => `<span class="ft-item"><b>#${i + 1}</b> @${c.login} <i>${fmtViewers(c.viewers)}</i></span>`).join("");
-    }
 
     if (first) return;
 
@@ -1219,6 +1214,114 @@
     }
   }
 
+  // ---------- fullscreen bottom ticker: three marquee rows ----------
+  const subEvents = [];
+  let subsDirty = false;
+  let ircStarted = false;
+  const tickerBuiltAt = { v: 0, s: 0, f: 0 };
+
+  function ensureTickerRows() {
+    const t = $("fsTicker");
+    if (t.childElementCount) return;
+    t.innerHTML = `
+      <div class="ft-row ft-viewers"><span class="ft-tag">LIVE NOW</span><div class="ft-scroll" id="ftV"></div></div>
+      <div class="ft-row ft-subs"><span class="ft-tag">SUB TRAIN</span><div class="ft-scroll" id="ftS"></div></div>
+      <div class="ft-row ft-followers"><span class="ft-tag">FOLLOWERS</span><div class="ft-scroll" id="ftF"></div></div>`;
+  }
+
+  /** Fill a marquee row: content is doubled so translateX(-50%) loops
+      seamlessly; duration derives from the actual content width so each
+      row moves at an exact px/s speed regardless of item count. */
+  function setMarquee(elId, items, pxPerSec) {
+    const seg = `<span class="ft-seg">${items.join('<span class="ft-sep">•</span>')}</span>`;
+    const scroll = $(elId);
+    scroll.innerHTML = seg + seg;
+    requestAnimationFrame(() => {
+      const half = scroll.scrollWidth / 2 || 600;
+      scroll.style.setProperty("--dur", Math.max(6, half / pxPerSec).toFixed(1) + "s");
+    });
+  }
+
+  function buildTickerRows(force = false) {
+    if (!document.body.classList.contains("fs-mode") || !state.apiOK) return;
+    ensureTickerRows();
+    const now = Date.now();
+    const live = state.channels.filter((c) => c.live).sort((a, b) => (b.viewers || 0) - (a.viewers || 0));
+
+    if (force || now - tickerBuiltAt.v > 60000) {
+      tickerBuiltAt.v = now;
+      setMarquee("ftV", live.map((c, i) =>
+        `<span class="ft-item"><b>#${i + 1}</b> @${c.login} <i>${fmtViewers(c.viewers)}</i></span>`), 70);
+    }
+    if (force || (subsDirty && now - tickerBuiltAt.s > 25000)) {
+      tickerBuiltAt.s = now;
+      subsDirty = false;
+      const items = subEvents.length
+        ? subEvents.map((s) => `<span class="ft-item">${s}</span>`)
+        : ['<span class="ft-item">🚂 SUB TRAIN warming up — new subs across campus appear here…</span>'];
+      setMarquee("ftS", items, 150); // the fast row
+    }
+    if (force || now - tickerBuiltAt.f > 120000) {
+      tickerBuiltAt.f = now;
+      const byFollowers = state.channels.slice().sort((a, b) => (b.followers || 0) - (a.followers || 0));
+      setMarquee("ftF", byFollowers.map((c) =>
+        `<span class="ft-item">@${c.login} <i>${fmtViewers(c.followers)} followers</i></span>`), 32); // the slow row
+    }
+  }
+  setInterval(buildTickerRows, 5000);
+
+  /** Anonymous Twitch chat connection across the busiest live channels —
+      USERNOTICE messages carry sub/resub/gift events for the SUB TRAIN. */
+  function startSubFeed() {
+    if (ircStarted) return;
+    ircStarted = true;
+    let ws;
+    try { ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443"); } catch (e) { ircStarted = false; return; }
+    ws.onopen = () => {
+      ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands");
+      ws.send("NICK justinfan" + (10000 + Math.floor(Math.random() * 80000)));
+      const chans = state.channels.filter((c) => c.live)
+        .sort((a, b) => (b.viewers || 0) - (a.viewers || 0)).slice(0, 60).map((c) => c.login);
+      let i = 0;
+      const joinNext = () => {
+        if (ws.readyState !== 1) return;
+        const batch = chans.slice(i, i + 15);
+        i += 15;
+        if (batch.length) {
+          ws.send("JOIN " + batch.map((c) => "#" + c).join(","));
+          setTimeout(joinNext, 11000); // stay under Twitch's join rate limit
+        }
+      };
+      joinNext();
+    };
+    ws.onmessage = (ev) => {
+      for (const line of String(ev.data).split("\r\n")) {
+        if (!line) continue;
+        if (line.startsWith("PING")) { ws.send("PONG :tmi.twitch.tv"); continue; }
+        if (!line.includes(" USERNOTICE #")) continue;
+        try {
+          const tags = Object.fromEntries(line.slice(1).split(" ")[0].split(";").map((kv) => kv.split("=")));
+          const msgId = tags["msg-id"];
+          if (!/^(sub|resub|subgift|submysterygift|giftpaidupgrade)$/.test(msgId || "")) continue;
+          const chan = (line.match(/ USERNOTICE #(\w+)/) || [])[1];
+          const user = (tags["display-name"] || tags["login"] || "someone").replace(/[<>&]/g, "");
+          let txt;
+          if (msgId === "submysterygift") txt = `🎁 ${user} dropped ${tags["msg-param-mass-gift-count"] || "some"} gift subs in @${chan}`;
+          else if (msgId === "subgift") txt = `🎁 ${user} gifted a sub in @${chan}`;
+          else {
+            const months = +(tags["msg-param-cumulative-months"] || 0);
+            txt = `⭐ ${user} subbed to @${chan}${months > 1 ? ` (${months} months)` : ""}`;
+          }
+          subEvents.unshift(txt);
+          if (subEvents.length > 40) subEvents.length = 40;
+          subsDirty = true;
+        } catch (e) { /* malformed line — skip */ }
+      }
+    };
+    ws.onclose = () => { ircStarted = false; }; // next fullscreen entry reconnects
+    ws.onerror = () => { try { ws.close(); } catch (e) {} };
+  }
+
   // ---------- wire up controls ----------
   function bindUI() {
     document.querySelectorAll(".mode-tab").forEach((b) => {
@@ -1276,6 +1379,7 @@
     const setFsMode = (on) => {
       document.body.classList.toggle("fs-mode", on);
       requestAnimationFrame(relayout);
+      if (on) { startSubFeed(); buildTickerRows(true); }
     };
     let resizeT = null;
     addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(relayout, 120); });
