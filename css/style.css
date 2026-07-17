@@ -360,31 +360,29 @@ body {
   align-items: center;
 }
 .lecture-grid .tile { width: 100%; min-width: 0; }
+.lecture-grid .tile.main { grid-area: m; }
 
-/* main column: big screen + its chat below, absorbing the space the
-   taller side stacks leave over (chat grows with the ring size) */
-.lecture-grid .main-col {
-  grid-area: m;
+/* "3 + chat": vertical chat column on the right, matching the ring height */
+.lecture-grid .lecture-chat {
+  grid-area: x;
   align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  min-height: 0;
-}
-.lecture-grid .main-chat {
-  flex: 1;
   min-height: 0;
   background: var(--ink-2);
   border: 1px solid var(--line);
   border-radius: 4px;
   overflow: hidden;
 }
-.lecture-grid .main-chat iframe {
+.lecture-grid .lecture-chat iframe {
   width: 100%;
   height: 100%;
   border: 0;
   display: block;
+}
+.lecture-grid.ring-3c {
+  grid-template-columns: 1fr 3fr 1.2fr;
+  grid-template-areas: "a m x" "b m x" "c m x";
+  max-width: calc((100vh - 285px) * 3);
+  max-width: calc((100dvh - 285px) * 3);
 }
 
 .lecture-grid.ring-4 {
@@ -1016,8 +1014,8 @@ body {
   .tile .chip { font-size: 10.5px; padding: 2px 6px; }
 
   /* lecture: no room for a ring — main on top, smalls 2-up below */
-  .lecture-grid, .lecture-grid.ring-4, .lecture-grid.ring-6,
-  .lecture-grid.ring-8, .lecture-grid.ring-12 {
+  .lecture-grid, .lecture-grid.ring-3c, .lecture-grid.ring-4,
+  .lecture-grid.ring-6, .lecture-grid.ring-8, .lecture-grid.ring-12 {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: none;
     grid-template-areas: none;
@@ -1025,8 +1023,8 @@ body {
     gap: 6px;
   }
   .lecture-grid .tile { grid-area: auto !important; }
-  .lecture-grid .main-col { grid-area: auto !important; grid-column: 1 / -1; order: -1; }
-  .lecture-grid .main-chat { display: none; } /* no spare space on phones */
+  .lecture-grid .tile.main { grid-column: 1 / -1; order: -1; }
+  .lecture-grid .lecture-chat { display: none; } /* no spare space on phones */
   .quad-grid { gap: 6px; }
   .theater-chat iframe { min-height: 320px; }
   .stage-note { font-size: 10px; }

@@ -18,7 +18,7 @@
     mode: "theater",         // Main Stage is the front door
     sort: "viewers",
     videoCap: 9,             // wall: how many tiles get real video
-    ringSize: 8,             // lecture: small tiles around the big one
+    ringSize: "8",           // lecture: tiles around the big one ("3c" = 3 + chat)
     tourSpeed: 30,
     focusLogin: null,        // lecture big tile
     quadLogins: [],
@@ -126,7 +126,7 @@
       if (!p.defaultsV2) state.mode = "theater"; // one-time: Main Stage becomes the entry view
       if (p.sort) state.sort = p.sort;
       if (p.videoCap != null) state.videoCap = +p.videoCap;
-      if (p.ringSize) state.ringSize = +p.ringSize;
+      if (p.ringSize) state.ringSize = String(p.ringSize);
       if (p.tourSpeed) state.tourSpeed = +p.tourSpeed;
       state.includeAlumni = !!p.includeAlumni;
       return p.selected;
@@ -561,29 +561,29 @@
     if (!state.focusLogin || !live.some((c) => c.login === state.focusLogin)) {
       state.focusLogin = live[0].login;
     }
-    const ring = live.filter((c) => c.login !== state.focusLogin).slice(0, state.ringSize);
+    const withChat = state.ringSize === "3c";
+    const ringCount = withChat ? 3 : +state.ringSize;
+    const ring = live.filter((c) => c.login !== state.focusLogin).slice(0, ringCount);
 
-    // ring surrounds the main screen, everything on one viewport
+    // ring flanks the main screen, everything on one viewport
     const AREAS = "abcdefghijkl";
     const grid = el("div", `lecture-grid ring-${state.ringSize}`);
     stage.appendChild(grid); // attach first: players must mount into the live DOM
 
     const focusCh = state.byLogin.get(state.focusLogin);
-    // the main column: big screen on top, its chat filling whatever
-    // vertical space the side stacks leave underneath (more ring tiles
-    // -> taller sides -> taller chat)
-    const mainCol = el("div", "main-col");
-    grid.appendChild(mainCol);
     const bigTile = makeTile(focusCh);
     bigTile.classList.add("main");
-    mainCol.appendChild(bigTile);
-    const chatWrap = el("div", "main-chat");
-    const chatFrame = document.createElement("iframe");
-    chatFrame.src = `https://www.twitch.tv/embed/${encodeURIComponent(focusCh.login)}/chat?parent=${encodeURIComponent(HOST)}&darkpopout`;
-    chatWrap.appendChild(chatFrame);
-    mainCol.appendChild(chatWrap);
-    // a sliver of chat is useless — hide it when the ring leaves no room
-    requestAnimationFrame(() => { if (chatWrap.clientHeight < 110) chatWrap.style.display = "none"; });
+    grid.appendChild(bigTile);
+
+    // "3 + chat": streams stack on the left, main center, chat column right
+    let chatFrame = null;
+    if (withChat) {
+      const chatCol = el("div", "lecture-chat");
+      chatFrame = document.createElement("iframe");
+      chatFrame.src = `https://www.twitch.tv/embed/${encodeURIComponent(focusCh.login)}/chat?parent=${encodeURIComponent(HOST)}&darkpopout`;
+      chatCol.appendChild(chatFrame);
+      grid.appendChild(chatCol);
+    }
 
     // Ring tiles carry real (zoom-fitted) players: the iframe's inner
     // window stays above Twitch's 400x300 autoplay minimum while
@@ -614,7 +614,7 @@
       }
       if (state.audioLogin === oldBig) state.audioLogin = promote; // sound stays on the big screen
       state.focusLogin = promote;
-      chatFrame.src = `https://www.twitch.tv/embed/${encodeURIComponent(promote)}/chat?parent=${encodeURIComponent(HOST)}&darkpopout`;
+      if (chatFrame) chatFrame.src = `https://www.twitch.tv/embed/${encodeURIComponent(promote)}/chat?parent=${encodeURIComponent(HOST)}&darkpopout`;
       bigTile.dataset.login = promote;
       t.dataset.login = oldBig;
       refreshTileChips(bigTile, state.byLogin.get(promote));
@@ -1170,7 +1170,7 @@
       save(); renderStage();
     });
     $("videoCapSelect").addEventListener("change", (e) => { state.videoCap = +e.target.value; save(); renderStage(); });
-    $("ringSizeSelect").addEventListener("change", (e) => { state.ringSize = +e.target.value; save(); renderStage(); });
+    $("ringSizeSelect").addEventListener("change", (e) => { state.ringSize = e.target.value; save(); renderStage(); });
     $("tourSpeedSelect").addEventListener("change", (e) => { state.tourSpeed = +e.target.value; save(); renderStage(); });
 
     // roster drawer
