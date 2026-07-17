@@ -341,47 +341,56 @@ body {
 }
 .wall-grid.dense { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 
-/* Twitch refuses to autoplay embeds smaller than 400x300, so tiles with
-   real video get enough room to qualify; previews stay compact */
-.wall-grid .tile.has-video { grid-column: span 2; aspect-ratio: auto; min-height: 304px; }
-.wall-grid.dense .tile.has-video { grid-column: span 3; }
+/* Twitch refuses to autoplay embeds smaller than 400x300, so playing
+   tiles get their own row at 540px+ wide — true 16:9, comfortably legal */
+.wall-featured {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.wall-featured:empty { display: none; margin: 0; }
 
-/* ---- LECTURE HALL: ring around the main screen, one viewport ---- */
+/* ---- LECTURE HALL: 16:9 ring flanking the main screen, one viewport.
+   Widths are capped from the viewport height so the 16:9 stacks fit. ---- */
 .lecture-grid {
   display: grid;
   gap: 8px;
-  height: calc(100vh - 175px);
-  height: calc(100dvh - 175px);
-  min-height: 480px;
+  margin: 0 auto;
+  align-items: center;
 }
 .lecture-grid .tile {
-  aspect-ratio: auto;
-  min-height: 0;
-  min-width: 0;
+  aspect-ratio: 16 / 9;
+  width: 100%;
   height: auto;
+  min-width: 0;
+  min-height: 0;
 }
 .lecture-grid .tile.main { grid-area: m; cursor: default; }
 
-/* smalls flank the main screen: half on the left, half on the right */
 .lecture-grid.ring-4 {
   grid-template-columns: 1fr 3fr 1fr;
-  grid-template-rows: repeat(2, 1fr);
   grid-template-areas: "a m c" "b m d";
+  max-width: calc((100vh - 190px) * 2.9);
+  max-width: calc((100dvh - 190px) * 2.9);
 }
 .lecture-grid.ring-6 {
   grid-template-columns: 1fr 3fr 1fr;
-  grid-template-rows: repeat(3, 1fr);
   grid-template-areas: "a m d" "b m e" "c m f";
+  max-width: calc((100vh - 190px) * 2.6);
+  max-width: calc((100dvh - 190px) * 2.6);
 }
 .lecture-grid.ring-8 {
   grid-template-columns: 1fr 3.2fr 1fr;
-  grid-template-rows: repeat(4, 1fr);
   grid-template-areas: "a m e" "b m f" "c m g" "d m h";
+  max-width: calc((100vh - 190px) * 2.2);
+  max-width: calc((100dvh - 190px) * 2.2);
 }
 .lecture-grid.ring-12 {
   grid-template-columns: 1fr 1fr 2.9fr 1fr 1fr;
-  grid-template-rows: repeat(3, 1fr);
   grid-template-areas: "a b m g h" "c d m i j" "e f m k l";
+  max-width: calc((100vh - 190px) * 3.9);
+  max-width: calc((100dvh - 190px) * 3.9);
 }
 
 /* ---- STUDY GROUP (quad) ---- */
@@ -409,6 +418,17 @@ body {
 @media (max-width: 900px) {
   .theater-layout { grid-template-columns: 1fr; }
   .theater-chat iframe { min-height: 380px; }
+}
+
+/* big single players stay 16:9 and fit the viewport */
+.tour-wrap .tile, .theater-layout .tile {
+  aspect-ratio: 16 / 9;
+  width: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 240px);
+  max-height: calc(100dvh - 240px);
+  margin: 0 auto;
+  justify-self: center;
 }
 
 /* ---- CAMPUS TOUR ---- */
@@ -999,13 +1019,9 @@ body {
   .notice { margin: 8px 8px 0; font-size: 12px; }
   .stage { padding: 8px 8px 6px; }
 
-  /* wall: playing streams get the full width, previews stay 2-up */
+  /* wall: playing streams full width, previews stay 2-up */
   .wall-grid, .wall-grid.dense { grid-template-columns: 1fr 1fr; gap: 6px; }
-  .wall-grid .tile.has-video, .wall-grid.dense .tile.has-video {
-    grid-column: 1 / -1;
-    aspect-ratio: 16 / 9;
-    min-height: 0;
-  }
+  .wall-featured { grid-template-columns: 1fr; gap: 6px; margin-bottom: 6px; }
   .tile .chip { font-size: 10.5px; padding: 2px 6px; }
 
   /* lecture: no room for a ring — main on top, smalls 2-up below */
@@ -1014,8 +1030,7 @@ body {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: none;
     grid-template-areas: none;
-    height: auto;
-    min-height: 0;
+    max-width: none;
     gap: 6px;
   }
   .lecture-grid .tile { grid-area: auto !important; aspect-ratio: 16 / 9; }

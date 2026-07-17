@@ -188,6 +188,12 @@
           autoplay: true,
         });
         p.addEventListener(Twitch.Player.READY, () => { try { p.play(); } catch (e) {} });
+        // a few gentle retries — some browsers/Twitch defer the first attempt
+        let nudges = 0;
+        const nudge = setInterval(() => {
+          try { if (p.isPaused()) p.play(); } catch (e) {}
+          if (++nudges >= 3) clearInterval(nudge);
+        }, 1500);
         // When autoplay is blocked (iOS, Low Power Mode, strict browsers)
         // the only thing that reliably starts playback is a tap on the
         // player's own play button — so the click-shield stands down until
@@ -359,13 +365,17 @@
     const live = liveSelected();
     const offline = sortChannels(selectedChannels().filter((c) => !c.live))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    // playing streams live in their own 16:9 row, sized past Twitch's
+    // 400x300 autoplay minimum; previews keep the dense wall below
+    const featured = el("div", "wall-featured");
     const grid = el("div", "wall-grid" + (live.length + offline.length > 40 ? " dense" : ""));
-    stage.appendChild(grid); // attach first: players must mount into the live DOM
+    stage.appendChild(featured); // attach first: players must mount into the live DOM
+    stage.appendChild(grid);
 
     live.forEach((ch, i) => {
       const withVideo = i < state.videoCap;
-      const tile = makeTile(ch, { hint: withVideo ? "CLICK · SOUND" : "CLICK · PLAY", shield: true });
-      grid.appendChild(tile);
+      const tile = makeTile(ch, { hint: withVideo ? "CLICK · SOUND" : "CLICK · WATCH", shield: true });
+      (withVideo ? featured : grid).appendChild(tile);
       if (withVideo) {
         mountPlayer(tile, ch.login, { muted: true, maxHeight: 480 });
       } else {
@@ -377,9 +387,13 @@
           if (entryPaused(entry)) { tryPlay(entry); return; } // resume beats audio toggle
           setAudio(state.audioLogin === ch.login ? null : ch.login);
         } else {
+          // promote the preview up into the featured row so the player
+          // is big enough to be allowed to start
           tile.querySelectorAll(".preview, .badge-offline").forEach((n) => n.remove());
+          featured.appendChild(tile);
           mountPlayer(tile, ch.login, { muted: true, maxHeight: 480 });
           tile.querySelector(".hint").textContent = "CLICK · SOUND";
+          tile.scrollIntoView({ behavior: "smooth", block: "nearest" });
         }
       });
     });
@@ -404,6 +418,7 @@
     const chans = liveSelected();
     for (const ch of chans) {
       const chip = el("button", "pick-chip" + (isSelected(ch.login) ? " selected" : ""));
+      chip.dataset.login = ch.login;
       chip.innerHTML = `<img src="${ch.avatar || ""}" alt="" onerror="this.style.visibility='hidden'">
         <span>@${ch.login}</span>
         <span class="pc-viewers">${state.apiOK ? fmtViewers(ch.viewers) : "LIVE"}</span>`;
@@ -696,7 +711,23 @@
       const tile = elv.closest(".tile");
       if (tile) tile.classList.toggle("offline", !ch.live);
     });
-    renderRosterList($("rosterSearch").value);
+    document.querySelectorAll(".pick-chip[data-login] .pc-viewers").forEach((pv) => {
+      const ch = state.byLogin.get(pv.closest(".pick-chip").dataset.login);
+      if (ch && ch.live) pv.textContent = state.apiOK ? fmtViewers(ch.viewers) : "LIVE";
+    });
+    if (!$("rosterDrawer").hidden) updateRosterLive();
+  }
+
+  /** Refresh the live/viewer column of the roster drawer without
+      rebuilding the rows (rebuilding under the cursor eats clicks). */
+  function updateRosterLive() {
+    document.querySelectorAll(".roster-row[data-login]").forEach((row) => {
+      const ch = state.byLogin.get(row.dataset.login);
+      if (!ch) return;
+      const liveEl = row.querySelector(".rr-live");
+      liveEl.classList.toggle("off", !ch.live);
+      liveEl.textContent = ch.live ? "● " + (state.apiOK ? fmtViewers(ch.viewers) : "LIVE") : "offline";
+    });
   }
 
   // ---------- preview auto-refresh (the control-room effect) ----------
@@ -723,6 +754,7 @@
       if (f && !ch.login.includes(f) && !ch.displayName.toLowerCase().includes(f)) continue;
       const tag = ch.role ? `<span class="rr-role">${ch.role}</span>` : ch.alum ? `<span class="rr-role alum">Class of '25</span>` : "";
       const row = el("label", "roster-row");
+      row.dataset.login = ch.login;
       row.innerHTML = `
         <input type="checkbox" ${state.selected.has(ch.login) ? "checked" : ""}>
         <img src="${ch.avatar || ""}" alt="" onerror="this.style.visibility='hidden'">
@@ -992,7 +1024,7 @@
     renderStage();
     loadClips();
 
-    setInterval(refreshData, 60000);
+    setInterval(refreshData, 5000);
   }
 
   document.readyState === "loading"
