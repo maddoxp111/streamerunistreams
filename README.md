@@ -9,7 +9,7 @@ An unofficial fan-made multiview for **Streamer University** — every SU stream
 | Mode | What it does |
 |---|---|
 | **▦ The Wall** | Every stream in one dense grid, like a security control room. The top N tiles (you pick: 4/9/16/24) play real video; the rest are live previews that refresh every 20 s. Click a preview to start its video, click a playing tile to move the **audio** to it. |
-| **◉ Lecture Hall** | One big stream in the middle **with audio**, a ring of smaller muted streams around it (4/6/8/12). Click a small tile to swap it into the main slot — no reloads, the players just switch channels. |
+| **◉ Lecture Hall** | One big stream in the middle **with audio**, flanked by smaller live streams (4/6/8/12) that autoplay muted. Press ◉ on a small tile to swap it into the main slot — no reloads, the players just switch channels. |
 | **◧ Study Group** | 2×2 quad view. Pick any 4 live channels from the strip; click a tile to move the audio. |
 | **▭ Main Stage** | One stream, big, with its Twitch chat beside it. |
 | **⟳ Campus Tour** | Auto-rotates through every live channel in your selection (20 s – 2 m per stop) with prev/pause/next controls. |
@@ -21,7 +21,7 @@ Every tile shows the streamer's **Twitch @** in the top-left and the **live view
 - **Sort** by viewer count, A→Z, or shuffle.
 - **Roster picker** — watch everyone, only who's live, or hand-pick your lineup (persisted in localStorage).
 - **Dean's List** — scroll down for the most-viewed clips of the week from across all SU channels.
-- **Scroll Feed** — watch the clips TikTok-style: full-screen vertical feed, flick (or arrow-key) to snap to the next clip; clicking any clip card drops you into the feed at that clip.
+- **Scroll Feed** — watch the clips TikTok-style: full-screen vertical feed in a fresh random order every time, flick (or arrow-key) to snap to the next surprise clip (autoplays with sound); clicking any clip card starts the feed with that clip.
 - Live data (who's live + viewer counts) refreshes every 5 s **without reloading any stream**.
 - Every stream element is strictly 16:9.
 

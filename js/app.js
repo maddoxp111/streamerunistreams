@@ -150,6 +150,7 @@
   function destroyPlayers() {
     players.clear(); // removing DOM nodes kills the iframes
     if (typeof playObserver !== "undefined") playObserver.disconnect();
+    if (typeof zoomObserver !== "undefined") zoomObserver.disconnect();
   }
 
   function capQuality(p, maxH) {
@@ -251,6 +252,7 @@
       A player that has played once is never auto-resumed — a user pause
       stays paused. */
   function sweepArmed() {
+    if (!$("clipFeed").hidden) return; // feed covers the stage — don't churn
     document.querySelectorAll('[data-auto-mount="1"]').forEach((tile) => {
       const cfg = autoMountOpts.get(tile);
       if (!cfg || players.has(cfg.login)) return;
@@ -268,12 +270,33 @@
     }
   }
 
+  /* Small tiles can't host a plain player: Twitch refuses autoplay for
+     embeds under 400x300 ("size"). CSS zoom is the escape hatch — the
+     iframe's inner window keeps a 544x306 layout (past the minimum, and
+     unlike transform:scale it doesn't trip the visibility check) while
+     rendering at tile size. */
+  const ZOOM_W = 544, ZOOM_H = 306;
+  const zoomObserver = new ResizeObserver((entries) => {
+    for (const en of entries) {
+      const holder = en.target.querySelector("[data-zoomfit]");
+      if (holder) holder.style.zoom = en.target.clientWidth / ZOOM_W;
+    }
+  });
+
   function mountPlayer(tile, login, opts = {}) {
-    const { muted = true, maxHeight = 0 } = opts;
+    const { muted = true, maxHeight = 0, zoomFit = false } = opts;
+    const media = tileMedia(tile);
     const holder = el("div");
     holder.id = "twp-" + (++playerSeq);
-    holder.style.cssText = "position:absolute;inset:0;";
-    tileMedia(tile).appendChild(holder);
+    if (zoomFit && "zoom" in document.body.style) {
+      holder.dataset.zoomfit = "1";
+      holder.style.cssText =
+        `position:absolute;top:0;left:0;width:${ZOOM_W}px;height:${ZOOM_H}px;zoom:${media.clientWidth / ZOOM_W};`;
+      zoomObserver.observe(media);
+    } else {
+      holder.style.cssText = "position:absolute;inset:0;";
+    }
+    media.appendChild(holder);
     tile.classList.add("has-video");
 
     if (embedReady && holder.isConnected) {
@@ -540,20 +563,34 @@
     bigTile.classList.add("main");
     grid.appendChild(bigTile);
 
-    // Ring tiles are live PREVIEWS, not players: Twitch hard-refuses
-    // autoplay for embeds under 400x300 ("size"), which ring tiles
-    // necessarily are. The big screen is where video+audio happens.
+    // Ring tiles carry real (zoom-fitted) players: the iframe's inner
+    // window stays above Twitch's 400x300 autoplay minimum while
+    // rendering small. Swapping exchanges channels — no reloads.
     const doSwap = (t) => {
       const oldBig = bigTile.dataset.login;
       const promote = t.dataset.login; // channel currently in this small tile
       if (promote === oldBig) return;
-      const entry = players.get(oldBig);
-      if (entry) {
-        swapPlayerChannel(oldBig, promote);
-        tryPlay(players.get(promote));
+      const bigE = players.get(oldBig);
+      const ringE = players.get(promote);
+      players.delete(oldBig);
+      players.delete(promote);
+      if (bigE) {
+        bigE.login = promote;
+        if (bigE.kind === "api") { try { bigE.p.setChannel(promote); } catch (e) {} }
+        else bigE.f.src = iframeSrc(promote, state.audioLogin !== oldBig);
+        players.set(promote, bigE);
       } else if (autoMountOpts.has(bigTile)) {
         autoMountOpts.get(bigTile).login = promote; // not mounted yet
       }
+      if (ringE) {
+        ringE.login = oldBig;
+        if (ringE.kind === "api") { try { ringE.p.setChannel(oldBig); } catch (e) {} }
+        else ringE.f.src = iframeSrc(oldBig, true);
+        players.set(oldBig, ringE);
+      } else if (autoMountOpts.has(t)) {
+        autoMountOpts.get(t).login = oldBig;
+      }
+      if (state.audioLogin === oldBig) state.audioLogin = promote; // sound stays on the big screen
       state.focusLogin = promote;
       bigTile.dataset.login = promote;
       t.dataset.login = oldBig;
@@ -561,6 +598,8 @@
       refreshTileChips(t, state.byLogin.get(oldBig));
       const img = t.querySelector(".preview");
       if (img) { img.dataset.livePrev = oldBig; img.src = previewURL(oldBig); }
+      tryPlay(players.get(promote));
+      tryPlay(players.get(oldBig));
       renderStrip();
       save();
     };
@@ -571,7 +610,8 @@
       });
       t.style.gridArea = AREAS[i];
       grid.appendChild(t);
-      addPreview(t, ch);
+      addPreview(t, ch); // shows until its player mounts on-screen
+      armAutoMount(t, ch.login, { muted: true, maxHeight: 360, zoomFit: true });
       tileMedia(t).addEventListener("click", () => doSwap(t));
     });
 
@@ -591,7 +631,7 @@
     armAutoMount(bigTile, focusCh.login, { muted: true });
     renderStrip();
     stage.appendChild(noteWithPlayAll(
-      "Press <b>🔊 SOUND</b> on the big screen for audio. Click a side preview (or its <b>◉</b>) to put it on the main screen."));
+      "Press <b>🔊 SOUND</b> on the big screen for audio. Click a side stream (or its <b>◉</b>) to put it on the main screen."));
   }
 
   function refreshTileChips(tile, ch) {
@@ -901,7 +941,7 @@
           <div class="clip-sub">${c.channel}${c.game ? " · " + c.game : ""}</div>
         </div>`;
       card.querySelector(".clip-title").textContent = c.title;
-      card.addEventListener("click", () => openFeed(allClips.indexOf(c)));
+      card.addEventListener("click", () => openFeed(c));
       grid.appendChild(card);
     }
     $("clipsMoreBtn").hidden = clipsShown >= allClips.length;
@@ -910,22 +950,48 @@
 
   // ---------- clip feed (TikTok-style vertical scroll) ----------
   let feedObserver = null;
+  let feedMountSeq = 0;
 
   function clipIframe(slug) {
     const f = document.createElement("iframe");
-    f.src = `https://clips.twitch.tv/embed?clip=${encodeURIComponent(slug)}&parent=${encodeURIComponent(HOST)}&autoplay=true`;
+    // unmuted: allow="autoplay" delegates the page's user activation
+    // (opening the feed was a click), so clips play with sound
+    f.src = `https://clips.twitch.tv/embed?clip=${encodeURIComponent(slug)}&parent=${encodeURIComponent(HOST)}&autoplay=true&muted=false`;
     f.allow = "autoplay; fullscreen";
     f.allowFullscreen = true;
     return f;
   }
 
-  function openFeed(startIdx = 0) {
+  function shuffleArray(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  let feedPrevAudio = null;
+
+  /** Opens the feed in a fresh random order — every scroll is a surprise
+      (no repeats). Opening from a clip card plays that clip first. */
+  function openFeed(startClip = null) {
     if (!allClips.length) return;
     const feed = $("clipFeed");
+    if (!feed.hidden) return; // already open (e.g. Enter re-firing the button)
+    if (feedObserver) { feedObserver.disconnect(); feedObserver = null; }
+    // clips play with sound — silence any soloed live stream behind the feed
+    feedPrevAudio = state.audioLogin;
+    if (feedPrevAudio) setAudio(null);
     const scroll = $("feedScroll");
     scroll.innerHTML = "";
 
-    allClips.forEach((c, i) => {
+    let feedClips = shuffleArray(allClips);
+    if (startClip) {
+      feedClips = [startClip, ...feedClips.filter((c) => c !== startClip)];
+    }
+
+    feedClips.forEach((c, i) => {
       const ch = state.byLogin.get(c.login);
       const item = el("section", "feed-item");
       item.dataset.idx = i;
@@ -946,25 +1012,47 @@
 
     feed.hidden = false;
     document.body.style.overflow = "hidden";
+    $("feedCounter").textContent = `1 / ${feedClips.length}`;
 
-    // Only the clip on screen has a live iframe: it mounts (autoplaying)
-    // when its item snaps into view and unmounts once fully scrolled away,
-    // so exactly one clip plays — and is audible — at a time.
+    // Only the clip on screen has a live iframe. Mounting happens after
+    // the snap animation settles — the clip player (like the stream
+    // player) refuses autoplay when loaded mid-scroll — and everything
+    // else unmounts, so exactly one clip plays and is audible at a time.
     feedObserver = new IntersectionObserver((entries) => {
       for (const en of entries) {
+        const item = en.target;
+        const player = item.querySelector(".feed-player");
+        if (en.intersectionRatio <= 0.15) {
+          if (player.firstChild) player.innerHTML = ""; // scrolled away: stop it
+          continue;
+        }
         if (en.intersectionRatio < 0.6) continue;
-        const player = en.target.querySelector(".feed-player");
-        $("feedCounter").textContent = `${+en.target.dataset.idx + 1} / ${allClips.length}`;
-        // exactly one live clip at a time: kill every other player first
-        scroll.querySelectorAll(".feed-player").forEach((p) => {
-          if (p !== player && p.firstChild) p.innerHTML = "";
-        });
-        if (!player.querySelector("iframe")) player.appendChild(clipIframe(player.dataset.slug));
+        $("feedCounter").textContent = `${+item.dataset.idx + 1} / ${feedClips.length}`;
+        const seq = ++feedMountSeq;
+        (async () => {
+          await scrollIdle();
+          if (seq !== feedMountSeq || !item.isConnected) return; // superseded
+          const r = item.getBoundingClientRect();
+          const rr = scroll.getBoundingClientRect();
+          const shown = Math.min(r.bottom, rr.bottom) - Math.max(r.top, rr.top);
+          if (shown / r.height < 0.6) return; // no longer the current snap
+          scroll.querySelectorAll(".feed-player").forEach((p) => {
+            if (p !== player && p.firstChild) p.innerHTML = "";
+          });
+          if (!player.querySelector("iframe")) player.appendChild(clipIframe(player.dataset.slug));
+        })();
       }
-    }, { root: scroll, threshold: 0.6 });
-    scroll.querySelectorAll(".feed-item").forEach((it) => feedObserver.observe(it));
+    }, { root: scroll, threshold: [0.15, 0.6] });
 
-    requestAnimationFrame(() => { scroll.scrollTop = startIdx * scroll.clientHeight; });
+    // observe only after the overlay has actually painted — evaluating
+    // the first clip mid-appearance fails the same visibility check
+    const obs = feedObserver;
+    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
+      if (obs !== feedObserver) return; // feed was closed/reopened
+      scroll.querySelectorAll(".feed-item").forEach((it) => obs.observe(it));
+    }, 250)));
+
+    scroll.scrollTop = 0;
   }
 
   function closeFeed() {
@@ -974,6 +1062,9 @@
     if (feedObserver) { feedObserver.disconnect(); feedObserver = null; }
     $("feedScroll").innerHTML = "";
     document.body.style.overflow = "";
+    // give the audio back to whichever stream had it before the feed
+    if (feedPrevAudio && players.has(feedPrevAudio)) setAudio(feedPrevAudio);
+    feedPrevAudio = null;
   }
 
   function feedStep(dir) {
@@ -1059,7 +1150,7 @@
 
     // clips + feed
     $("clipsMoreBtn").addEventListener("click", () => { clipsShown += 18; renderClips(); });
-    $("feedOpenBtn").addEventListener("click", () => openFeed(0));
+    $("feedOpenBtn").addEventListener("click", () => openFeed());
     $("feedClose").addEventListener("click", closeFeed);
     $("feedUp").addEventListener("click", () => feedStep(-1));
     $("feedDown").addEventListener("click", () => feedStep(1));

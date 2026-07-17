@@ -858,7 +858,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 54px 70px 20px;
+  /* top padding must clear the .feed-top bar completely — if the bar
+     overlaps the player by even a pixel, Twitch counts it as occluded
+     and refuses to autoplay the clip */
+  padding: 72px 70px 16px;
 }
 
 .feed-stage {
@@ -935,9 +938,10 @@ body {
 .feed-nav button:hover { border-color: var(--gold); color: var(--gold-bright); }
 
 @media (max-width: 700px) {
-  .feed-item { padding: 50px 8px 8px; }
-  .feed-nav { right: 6px; }
-  .feed-nav button { width: 38px; height: 38px; }
+  .feed-item { padding: 68px 8px 8px; }
+  /* arrows would overlap the clip (occlusion kills autoplay); flicking
+     is the native navigation on touch anyway */
+  .feed-nav { display: none; }
 }
 
 /* ============ SCROLLBARS ============ */
