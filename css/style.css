@@ -360,7 +360,32 @@ body {
   align-items: center;
 }
 .lecture-grid .tile { width: 100%; min-width: 0; }
-.lecture-grid .tile.main { grid-area: m; }
+
+/* main column: big screen + its chat below, absorbing the space the
+   taller side stacks leave over (chat grows with the ring size) */
+.lecture-grid .main-col {
+  grid-area: m;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+.lecture-grid .main-chat {
+  flex: 1;
+  min-height: 0;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.lecture-grid .main-chat iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
 
 .lecture-grid.ring-4 {
   grid-template-columns: 1fr 3fr 1fr;
@@ -377,8 +402,8 @@ body {
 .lecture-grid.ring-8 {
   grid-template-columns: 1fr 3.2fr 1fr;
   grid-template-areas: "a m e" "b m f" "c m g" "d m h";
-  max-width: calc((100vh - 315px) * 2.3);
-  max-width: calc((100dvh - 315px) * 2.3);
+  max-width: calc((100vh - 315px) * 2.15);
+  max-width: calc((100dvh - 315px) * 2.15);
 }
 .lecture-grid.ring-12 {
   grid-template-columns: 1fr 1fr 2.9fr 1fr 1fr;
@@ -1000,7 +1025,8 @@ body {
     gap: 6px;
   }
   .lecture-grid .tile { grid-area: auto !important; }
-  .lecture-grid .tile.main { grid-column: 1 / -1; order: -1; }
+  .lecture-grid .main-col { grid-area: auto !important; grid-column: 1 / -1; order: -1; }
+  .lecture-grid .main-chat { display: none; } /* no spare space on phones */
   .quad-grid { gap: 6px; }
   .theater-chat iframe { min-height: 320px; }
   .stage-note { font-size: 10px; }
