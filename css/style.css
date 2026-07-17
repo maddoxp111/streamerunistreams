@@ -901,9 +901,57 @@ body {
 
 /* ============ SMALL SCREENS ============ */
 @media (max-width: 640px) {
-  .header-inner { justify-content: center; text-align: center; }
-  .campus-stats { width: 100%; justify-content: center; }
+  /* header: one tight centered block */
+  .header-inner { padding: 12px 14px 10px; gap: 10px; justify-content: center; text-align: center; }
+  .brand { gap: 12px; }
+  .crest { width: 46px; }
+  .brand-text h1 { font-size: 24px; letter-spacing: 2px; }
+  .motto { font-size: 8.5px; letter-spacing: 2px; margin-top: 4px; }
+  .campus-stats { width: 100%; justify-content: center; gap: 36px; }
   .stat { text-align: center; }
-  .control-inner { justify-content: center; }
-  .wall-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .stat-num { font-size: 22px; }
+  .stat-label { font-size: 9px; letter-spacing: 2px; }
+
+  /* control bar: swipeable tab row + one compact settings row */
+  .control-inner { padding: 8px 10px; gap: 8px; }
+  .mode-tabs {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .mode-tabs::-webkit-scrollbar { display: none; }
+  .mode-tab { flex: 0 0 auto; font-size: 11px; letter-spacing: 1px; padding: 7px 11px; }
+  .control-group { width: 100%; justify-content: flex-start; gap: 8px; }
+  .ctl { gap: 5px; font-size: 9px; letter-spacing: 1px; }
+  .ctl select { font-size: 12px; padding: 5px 6px; }
+  .btn-roster { margin-left: auto; font-size: 11px; letter-spacing: 1px; padding: 7px 10px; }
+
+  .notice { margin: 8px 8px 0; font-size: 12px; }
+  .stage { padding: 8px 8px 6px; }
+
+  /* wall: playing streams get the full width, previews stay 2-up */
+  .wall-grid, .wall-grid.dense { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .wall-grid .tile.has-video { grid-column: 1 / -1; }
+  .tile .chip { font-size: 10.5px; padding: 2px 6px; }
+
+  .lecture-layout { gap: 6px; }
+  .quad-grid { gap: 6px; }
+  .theater-chat iframe { min-height: 320px; }
+  .stage-note { font-size: 10px; }
+  .tour-bar { flex-wrap: wrap; font-size: 12px; }
+
+  /* clips */
+  .section-head { flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .pennant { display: none; }
+  .section-head h2 { white-space: normal; text-align: center; }
+  .clips-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .clip-title { font-size: 13px; }
+  .clip-meta { padding: 7px 9px 9px; }
+  .clip-sub { font-size: 10px; margin-top: 3px; }
+  .clip-thumb .chip { font-size: 10px; }
+
+  .site-footer { padding: 18px 14px 26px; font-size: 10.5px; }
 }

@@ -187,15 +187,20 @@
           muted,
           autoplay: true,
         });
-        // The embed lib creates its iframe without allow="autoplay", so
-        // browsers deny autoplay to the cross-origin player and every
-        // stream starts paused. Grant the permission and reload the frame.
-        const f = holder.querySelector("iframe");
-        if (f && !(f.getAttribute("allow") || "").includes("autoplay")) {
-          f.setAttribute("allow", "autoplay; fullscreen");
-          f.src = f.src;
-        }
         p.addEventListener(Twitch.Player.READY, () => { try { p.play(); } catch (e) {} });
+        // When autoplay is blocked (iOS, Low Power Mode, strict browsers)
+        // the only thing that reliably starts playback is a tap on the
+        // player's own play button — so the click-shield stands down until
+        // the stream is actually playing, then arms for audio/swap taps.
+        const shield = tile.querySelector(".click-shield");
+        if (shield) {
+          const arm = (on) => { shield.style.pointerEvents = on ? "" : "none"; };
+          arm(false);
+          p.addEventListener(Twitch.Player.PLAYING, () => arm(true));
+          p.addEventListener(Twitch.Player.PAUSE, () => arm(false));
+          if (Twitch.Player.ENDED) p.addEventListener(Twitch.Player.ENDED, () => arm(false));
+        }
+        tile.classList.add("has-video");
         if (maxHeight) {
           let done = false;
           p.addEventListener(Twitch.Player.PLAYING, () => {
@@ -214,6 +219,11 @@
     f.allow = "autoplay; fullscreen";
     f.allowFullscreen = true;
     holder.appendChild(f);
+    // no player API in iframe mode, so the shield can't know the play
+    // state — leave it down so the native play button always works
+    const shield = tile.querySelector(".click-shield");
+    if (shield) shield.style.pointerEvents = "none";
+    tile.classList.add("has-video");
     players.set(login, { kind: "iframe", f, holder, tile, login });
   }
 
