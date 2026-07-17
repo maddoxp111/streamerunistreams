@@ -666,6 +666,127 @@ body {
 }
 .btn-more:hover { background: var(--maroon-deep); color: var(--parchment); }
 
+/* ============ FULLSCREEN MODE ============ */
+.btn-fs {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-dim);
+  background: var(--ink-3);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+}
+.btn-fs:hover { border-color: var(--gold); color: var(--gold-bright); }
+
+.fs-banner { display: none; }
+
+body.fs-mode {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+body.fs-mode .site-header,
+body.fs-mode .control-bar,
+body.fs-mode .notice,
+body.fs-mode .clips-section,
+body.fs-mode .site-footer,
+body.fs-mode .stage-note,
+body.fs-mode .pick-strip { display: none; }
+
+/* the banner flexes: it absorbs whatever vertical space the streams
+   leave over (growing into a big scoreboard and pushing them down),
+   and shrinks to a slim strip when they need the room */
+body.fs-mode .fs-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3%;
+  flex: 1 1 auto;
+  min-height: 54px;
+  max-height: 24vh;
+  container-type: size;
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.2), rgba(0,0,0,0)),
+    linear-gradient(180deg, var(--maroon), var(--maroon-deep));
+  border-bottom: 2px solid var(--gold);
+  overflow: hidden;
+}
+body.fs-mode .fs-crest { height: 78cqh; max-height: 120px; width: auto; }
+body.fs-mode .fs-title { display: flex; flex-direction: column; align-items: center; gap: 4cqh; }
+body.fs-mode .fs-name {
+  font-family: var(--varsity);
+  font-size: clamp(15px, 34cqh, 58px);
+  letter-spacing: 0.14em;
+  color: var(--parchment);
+  white-space: nowrap;
+  line-height: 1;
+}
+body.fs-mode .fs-sub {
+  font-family: var(--sans);
+  font-size: clamp(7px, 11cqh, 16px);
+  letter-spacing: 0.3em;
+  color: rgba(232, 217, 168, 0.7);
+  white-space: nowrap;
+}
+body.fs-mode .fs-stats { display: flex; gap: 4cqh 36px; }
+body.fs-mode .fs-stat { display: flex; flex-direction: column; align-items: center; gap: 3cqh; }
+body.fs-mode .fs-stat b {
+  font-family: var(--varsity);
+  font-size: clamp(14px, 30cqh, 50px);
+  color: var(--gold-bright);
+  line-height: 1;
+}
+body.fs-mode .fs-stat i {
+  font-style: normal;
+  font-family: var(--sans);
+  font-size: clamp(6px, 10cqh, 14px);
+  letter-spacing: 0.25em;
+  color: rgba(232, 217, 168, 0.65);
+  white-space: nowrap;
+}
+body.fs-mode .fs-exit {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 14px;
+  color: var(--parchment);
+  background: rgba(20, 20, 26, 0.5);
+  border: 1px solid rgba(232, 217, 168, 0.35);
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+}
+body.fs-mode .fs-exit:hover { border-color: var(--gold-bright); }
+
+body.fs-mode .stage {
+  flex: 0 1 auto;
+  overflow-y: auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 10px;
+  min-height: 0;
+}
+
+/* stream layouts get the whole viewport minus a slim banner — the
+   flexing banner soaks up whatever they don't use */
+body.fs-mode .lecture-grid.ring-3c { max-width: calc((100vh - 185px) * 3); max-width: calc((100dvh - 185px) * 3); }
+body.fs-mode .lecture-grid.ring-4  { max-width: calc((100vh - 110px) * 2.9); max-width: calc((100dvh - 110px) * 2.9); }
+body.fs-mode .lecture-grid.ring-6  { max-width: calc((100vh - 180px) * 2.9); max-width: calc((100dvh - 180px) * 2.9); }
+body.fs-mode .lecture-grid.ring-8  { max-width: calc((100vh - 215px) * 2.15); max-width: calc((100dvh - 215px) * 2.15); }
+body.fs-mode .lecture-grid.ring-12 { max-width: calc((100vh - 180px) * 4); max-width: calc((100dvh - 180px) * 4); }
+body.fs-mode .tour-wrap .tile, body.fs-mode .theater-layout .tile {
+  width: min(100%, calc((100vh - 210px) * 16 / 9));
+  width: min(100%, calc((100dvh - 210px) * 16 / 9));
+}
+body.fs-mode .quad-grid { max-width: calc((100vh - 145px) * 1.77); max-width: calc((100dvh - 145px) * 1.77); margin: 0 auto; }
+
 /* ============ FOOTER ============ */
 .site-footer {
   border-top: 1px solid var(--line);

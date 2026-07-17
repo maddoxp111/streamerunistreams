@@ -857,6 +857,8 @@
     const liveAll = state.channels.filter((c) => c.live);
     $("statLive").textContent = state.apiOK ? `${liveAll.length}/${state.channels.length}` : "?";
     $("statViewers").textContent = state.apiOK ? fmtViewers(liveAll.reduce((s, c) => s + (c.viewers || 0), 0)) : "?";
+    $("fsLive").textContent = $("statLive").textContent;
+    $("fsViewers").textContent = $("statViewers").textContent;
 
     if (first) return;
 
@@ -1200,6 +1202,26 @@
       onSelectionChanged();
       loadClips();
     });
+
+    // fullscreen mode: just the streams under a scoreboard banner
+    const setFsMode = (on) => document.body.classList.toggle("fs-mode", on);
+    $("fsBtn").addEventListener("click", () => {
+      const root = document.documentElement;
+      if (root.requestFullscreen) {
+        if (!document.fullscreenElement) {
+          root.requestFullscreen().then(() => setFsMode(true)).catch(() => setFsMode(true));
+        } else {
+          document.exitFullscreen();
+        }
+      } else {
+        setFsMode(!document.body.classList.contains("fs-mode")); // no FS API (iPhone): layout-only TV mode
+      }
+    });
+    $("fsExit").addEventListener("click", () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else setFsMode(false);
+    });
+    document.addEventListener("fullscreenchange", () => setFsMode(!!document.fullscreenElement));
 
     // clips + feed
     $("clipsMoreBtn").addEventListener("click", () => { clipsShown += 18; renderClips(); });

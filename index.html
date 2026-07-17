@@ -101,12 +101,27 @@
         </select>
       </label>
 
+      <button class="btn-fs" id="fsBtn" title="Fullscreen — just the streams and a scoreboard banner">⛶</button>
       <button class="btn-roster" id="rosterBtn" title="Pick exactly which streamers are in your view">
         ☰ ROSTER <span class="roster-count" id="rosterCount"></span>
       </button>
     </div>
   </div>
 </nav>
+
+<!-- ============ FULLSCREEN BANNER (visible only in fullscreen mode) ============ -->
+<div class="fs-banner" id="fsBanner">
+  <img src="assets/crest.svg" alt="" class="fs-crest">
+  <div class="fs-title">
+    <span class="fs-name">Streamer University</span>
+    <span class="fs-sub">CLASS OF 2026 · UNOFFICIAL MULTIVIEW</span>
+  </div>
+  <div class="fs-stats">
+    <span class="fs-stat"><b id="fsLive">–</b><i>LIVE ON CAMPUS</i></span>
+    <span class="fs-stat"><b id="fsViewers">–</b><i>TOTAL WATCHING</i></span>
+  </div>
+  <button class="fs-exit" id="fsExit" title="Exit fullscreen">✕</button>
+</div>
 
 <!-- ============ NOTICES ============ -->
 <div class="notice" id="fileNotice" hidden>
