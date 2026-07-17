@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Streamer University — Multiview</title>
+<meta name="description" content="Watch every Streamer University stream at once — control room wall, focus mode, quad view, and the top clips from across campus.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Graduate&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="assets/crest.svg" type="image/svg+xml">
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <img src="assets/crest.svg" alt="Streamer University crest" class="crest">
+      <div class="brand-text">
+        <h1>Streamer <span>University</span></h1>
+        <p class="motto">EST. MMXXV &nbsp;·&nbsp; <em>Chattus Numquam Dormit</em> &nbsp;·&nbsp; UNOFFICIAL MULTIVIEW</p>
+      </div>
+    </div>
+    <div class="campus-stats" id="campusStats">
+      <div class="stat">
+        <span class="stat-num" id="statLive">–</span>
+        <span class="stat-label">LIVE ON CAMPUS</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num" id="statViewers">–</span>
+        <span class="stat-label">TOTAL WATCHING</span>
+      </div>
+    </div>
+  </div>
+  <div class="gold-bar"></div>
+</header>
+
+<!-- ============ MODE / CONTROL BAR ============ -->
+<nav class="control-bar" id="controlBar">
+  <div class="control-inner">
+    <div class="mode-tabs" role="tablist" aria-label="View modes">
+      <button class="mode-tab active" data-mode="wall" role="tab" title="Every stream on one wall, security-control-room style">
+        <span class="tab-icon">▦</span> The Wall
+      </button>
+      <button class="mode-tab" data-mode="lecture" role="tab" title="One big stream with audio, a ring of smaller ones around it">
+        <span class="tab-icon">◉</span> Lecture Hall
+      </button>
+      <button class="mode-tab" data-mode="quad" role="tab" title="Four streams, 2×2">
+        <span class="tab-icon">◧</span> Study Group
+      </button>
+      <button class="mode-tab" data-mode="theater" role="tab" title="One stream, big, with chat">
+        <span class="tab-icon">▭</span> Main Stage
+      </button>
+      <button class="mode-tab" data-mode="shuffle" role="tab" title="Auto-rotates through live streams">
+        <span class="tab-icon">⟳</span> Campus Tour
+      </button>
+    </div>
+
+    <div class="control-group">
+      <label class="ctl">
+        <span>SORT</span>
+        <select id="sortSelect">
+          <option value="viewers">Viewer count</option>
+          <option value="alpha">A → Z</option>
+          <option value="random">Shuffle</option>
+        </select>
+      </label>
+
+      <label class="ctl" id="liveVideoCtl">
+        <span>LIVE VIDEO</span>
+        <select id="videoCapSelect" title="How many tiles play real video at once (the rest are auto-refreshing live previews)">
+          <option value="0">Previews only</option>
+          <option value="4">Top 4</option>
+          <option value="9" selected>Top 9</option>
+          <option value="16">Top 16</option>
+          <option value="24">Top 24</option>
+        </select>
+      </label>
+
+      <label class="ctl" id="ringSizeCtl" hidden>
+        <span>RING</span>
+        <select id="ringSizeSelect">
+          <option value="4">4 around</option>
+          <option value="6" selected>6 around</option>
+          <option value="8">8 around</option>
+          <option value="12">12 around</option>
+        </select>
+      </label>
+
+      <label class="ctl" id="tourSpeedCtl" hidden>
+        <span>ROTATE</span>
+        <select id="tourSpeedSelect">
+          <option value="20">20s</option>
+          <option value="30" selected>30s</option>
+          <option value="60">60s</option>
+          <option value="120">2m</option>
+        </select>
+      </label>
+
+      <button class="btn-roster" id="rosterBtn" title="Pick exactly which streamers are in your view">
+        ☰ ROSTER <span class="roster-count" id="rosterCount"></span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- ============ NOTICES ============ -->
+<div class="notice" id="fileNotice" hidden>
+  ⚠ Twitch embeds can’t run from a <code>file://</code> page. Serve this folder (e.g. <code>python3 -m http.server</code>) and open <code>http://localhost:8000</code>.
+</div>
+<div class="notice" id="apiNotice" hidden>
+  ⚠ Couldn’t reach Twitch for live data — showing the full roster without viewer counts. Streams may still play.
+</div>
+
+<!-- ============ STAGE (mode views render here) ============ -->
+<main class="stage" id="stage" aria-live="polite">
+  <div class="loading" id="loading">
+    <div class="loading-crest"><img src="assets/crest.svg" alt=""></div>
+    <p>TAKING ATTENDANCE…</p>
+  </div>
+</main>
+
+<!-- ============ CLIPS ============ -->
+<section class="clips-section" id="clipsSection">
+  <div class="section-head">
+    <div class="pennant left"></div>
+    <h2>DEAN&rsquo;S LIST <span>· TOP CLIPS FROM ACROSS CAMPUS · PAST WEEK</span></h2>
+    <div class="pennant right"></div>
+  </div>
+  <div class="clips-grid" id="clipsGrid">
+    <p class="clips-loading">Grading submissions…</p>
+  </div>
+  <div class="clips-more-wrap">
+    <button class="btn-more" id="clipsMoreBtn" hidden>SHOW MORE CLIPS</button>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="site-footer">
+  <p><strong>STREAMER UNIVERSITY MULTIVIEW</strong> — an unofficial fan project. Not affiliated with Streamer University, Kai Cenat, AMP, or Twitch.</p>
+  <p>All streams and clips play through official Twitch embeds. Live data refreshes every 60 seconds.</p>
+</footer>
+
+<!-- ============ ROSTER DRAWER ============ -->
+<div class="drawer-overlay" id="drawerOverlay" hidden></div>
+<aside class="roster-drawer" id="rosterDrawer" hidden aria-label="Roster picker">
+  <div class="drawer-head">
+    <h3>THE ROSTER</h3>
+    <button class="drawer-close" id="drawerClose" aria-label="Close">✕</button>
+  </div>
+  <div class="drawer-tools">
+    <input type="search" id="rosterSearch" placeholder="Search streamers…">
+    <div class="drawer-btns">
+      <button id="rosterAll">ALL</button>
+      <button id="rosterNone">NONE</button>
+      <button id="rosterLive">LIVE ONLY</button>
+    </div>
+  </div>
+  <div class="drawer-list" id="rosterList"></div>
+</aside>
+
+<!-- ============ CLIP MODAL ============ -->
+<div class="modal-overlay" id="clipModal" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <span id="clipModalTitle"></span>
+      <button class="drawer-close" id="clipModalClose" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-player" id="clipModalPlayer"></div>
+  </div>
+</div>
+
+<script src="js/roster.js"></script>
+<script src="js/twitch.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

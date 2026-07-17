@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140" width="120" height="140">
+  <!-- Generic collegiate crest for the fan-made multiview (not the official SU logo) -->
+  <defs>
+    <linearGradient id="shieldGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6b1225"/>
+      <stop offset="1" stop-color="#4a0c1a"/>
+    </linearGradient>
+  </defs>
+  <!-- laurel -->
+  <g fill="none" stroke="#c9a24b" stroke-width="3" stroke-linecap="round">
+    <path d="M18 40 C6 70 10 104 38 124"/>
+    <path d="M102 40 C114 70 110 104 82 124"/>
+  </g>
+  <g fill="#c9a24b">
+    <ellipse cx="14" cy="52" rx="7" ry="3.4" transform="rotate(-58 14 52)"/>
+    <ellipse cx="10" cy="68" rx="7" ry="3.4" transform="rotate(-78 10 68)"/>
+    <ellipse cx="10.5" cy="85" rx="7" ry="3.4" transform="rotate(-95 10.5 85)"/>
+    <ellipse cx="15" cy="101" rx="7" ry="3.4" transform="rotate(-115 15 101)"/>
+    <ellipse cx="24" cy="115" rx="7" ry="3.4" transform="rotate(-135 24 115)"/>
+    <ellipse cx="106" cy="52" rx="7" ry="3.4" transform="rotate(58 106 52)"/>
+    <ellipse cx="110" cy="68" rx="7" ry="3.4" transform="rotate(78 110 68)"/>
+    <ellipse cx="109.5" cy="85" rx="7" ry="3.4" transform="rotate(95 109.5 85)"/>
+    <ellipse cx="105" cy="101" rx="7" ry="3.4" transform="rotate(115 105 101)"/>
+    <ellipse cx="96" cy="115" rx="7" ry="3.4" transform="rotate(135 96 115)"/>
+  </g>
+  <!-- shield -->
+  <path d="M60 14 L98 26 L98 74 C98 100 82 116 60 126 C38 116 22 100 22 74 L22 26 Z"
+        fill="url(#shieldGrad)" stroke="#c9a24b" stroke-width="4"/>
+  <path d="M60 22 L91 32 L91 73 C91 95 78 108 60 117 C42 108 29 95 29 73 L29 32 Z"
+        fill="none" stroke="#e8d9a8" stroke-width="1.5" opacity="0.7"/>
+  <!-- mortarboard -->
+  <g>
+    <polygon points="60,34 84,43 60,52 36,43" fill="#1a1a1e" stroke="#c9a24b" stroke-width="1.6"/>
+    <path d="M48 47 L48 55 C48 59 72 59 72 55 L72 47 L60 52 Z" fill="#1a1a1e" stroke="#c9a24b" stroke-width="1.2"/>
+    <line x1="84" y1="43" x2="84" y2="56" stroke="#c9a24b" stroke-width="1.6"/>
+    <circle cx="84" cy="58" r="2.4" fill="#c9a24b"/>
+  </g>
+  <!-- live dot + play sign -->
+  <g>
+    <polygon points="52,66 52,88 72,77" fill="#e8d9a8"/>
+    <circle cx="76" cy="66" r="4" fill="#ff4d5e"/>
+  </g>
+  <!-- SU letters -->
+  <text x="60" y="110" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="bold" font-size="17" fill="#c9a24b" letter-spacing="2">S·U</text>
+</svg>
