@@ -907,6 +907,11 @@
     $("statViewers").textContent = state.apiOK ? fmtViewers(liveAll.reduce((s, c) => s + (c.viewers || 0), 0)) : "?";
     $("fsLive").textContent = $("statLive").textContent;
     $("fsViewers").textContent = $("statViewers").textContent;
+    if (state.apiOK) {
+      const top5 = liveAll.slice().sort((a, b) => (b.viewers || 0) - (a.viewers || 0)).slice(0, 5);
+      $("fsTicker").innerHTML = '<span class="ft-label">TOP OF THE CLASS</span>' +
+        top5.map((c, i) => `<span class="ft-item"><b>#${i + 1}</b> @${c.login} <i>${fmtViewers(c.viewers)}</i></span>`).join("");
+    }
 
     if (first) return;
 
