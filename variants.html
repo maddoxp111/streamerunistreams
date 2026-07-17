@@ -1,0 +1,23 @@
+<!DOCTYPE html><html><head><meta charset="utf8"><title>v</title>
+<link rel="stylesheet" href="css/style.css"></head>
+<body>
+<main class="stage"><div class="wall-featured" id="row"></div></main>
+<script src="https://embed.twitch.tv/embed/v1.js"></script>
+<script>
+const variant = new URLSearchParams(location.search).get('v') || 'full';
+const row = document.getElementById('row');
+const tile = document.createElement('div');
+tile.className = 'tile';
+tile.innerHTML = '<div class="tile-bar"><span class="chip handle">@kaicenat</span><span class="tb-spacer"></span><span class="chip viewers"><span class="dot"></span>99K</span><button class="tb-btn audio">🔊</button></div><div class="tile-media"></div>';
+row.appendChild(tile);
+if (variant === 'noradius') { tile.style.borderRadius = '0'; tile.style.overflow = 'visible'; }
+if (variant === 'nobar') tile.querySelector('.tile-bar').remove();
+if (variant === 'noborder') tile.style.border = 'none';
+if (variant === 'nobg') { document.body.style.backgroundImage = 'none'; document.body.style.background = '#000'; }
+if (variant === 'nodot') document.querySelector('.dot').style.animation = 'none';
+let target;
+if (variant === 'noholder') { target = tile.querySelector('.tile-media'); target.id = 'h'; }
+else { target = document.createElement('div'); target.id = 'h'; target.style.cssText = 'position:absolute;inset:0;'; tile.querySelector('.tile-media').appendChild(target); }
+new Twitch.Player('h', { channel: 'kaicenat', parent: [location.hostname], width: '100%', height: '100%', muted: true, autoplay: true });
+</script>
+</body></html>

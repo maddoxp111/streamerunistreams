@@ -149,6 +149,7 @@
 
   function destroyPlayers() {
     players.clear(); // removing DOM nodes kills the iframes
+    if (typeof playObserver !== "undefined") playObserver.disconnect();
   }
 
   function capQuality(p, maxH) {
@@ -171,11 +172,109 @@
    * Twitch embed library resolves its target element by id and throws on
    * detached nodes. We fall back to a plain iframe if it throws anyway.
    */
-  function mountPlayer(tile, login, { muted = true, maxHeight = 0 } = {}) {
+  /**
+   * Twitch's player evaluates autoplay ONCE, against "style visibility"
+   * and "viewport visibility" — if the tile is off-screen or the layout
+   * is still shifting (fonts, grids filling in) when the player loads,
+   * autoplay is refused and programmatic play() won't revive it. So
+   * players are never mounted eagerly: tiles are armed, and the observer
+   * mounts each player only once its tile is actually visible and the
+   * layout has settled. Mounts are also spaced out ~150ms apart.
+   */
+  const autoMountOpts = new WeakMap(); // tile -> {login, opts}
+  let mountGate = Promise.resolve();
+
+  /**
+   * How much of the element is UNOBSTRUCTED in the viewport (0..1).
+   * The sticky control bar counts as occlusion — Twitch's player fails
+   * "style visibility" for anything sitting underneath it.
+   */
+  function visibleFrac(el) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return 0;
+    const bar = $("controlBar");
+    const topEdge = bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
+    const ih = Math.min(r.bottom, innerHeight) - Math.max(r.top, topEdge);
+    const iw = Math.min(r.right, innerWidth) - Math.max(r.left, 0);
+    return ih > 0 && iw > 0 ? (ih * iw) / (r.height * r.width) : 0;
+  }
+
+  let lastScrollAt = 0;
+  addEventListener("scroll", () => { lastScrollAt = performance.now(); }, { passive: true, capture: true });
+  const scrollIdle = () => new Promise((res) => {
+    const chk = () => (performance.now() - lastScrollAt > 250 ? res() : setTimeout(chk, 120));
+    chk();
+  });
+
+  function gatedMount(tile, login, opts) {
+    mountGate = mountGate.then(async () => {
+      await scrollIdle(); // never mount mid-scroll — the check would fail
+      await new Promise((res) => setTimeout(res, 150));
+      if (!tile.isConnected || players.has(login)) return;
+      if (visibleFrac(tile) < 0.75) {
+        // partially hidden (or under the sticky bar) — the periodic sweep
+        // and observer will pick it up when it's properly on screen
+        tile.dataset.autoMount = "1";
+        playObserver.observe(tile);
+        return;
+      }
+      tileMedia(tile).innerHTML = "";
+      mountPlayer(tile, login, opts);
+    });
+  }
+
+  const playObserver = new IntersectionObserver((entries) => {
+    for (const en of entries) {
+      if (!en.isIntersecting) continue;
+      const tile = en.target;
+      if (tile.dataset.autoMount === "1") {
+        tile.dataset.autoMount = "";
+        const cfg = autoMountOpts.get(tile);
+        if (cfg) gatedMount(tile, cfg.login, cfg.opts);
+      } else {
+        const entry = players.get(tile.dataset.login);
+        if (entry && entryPaused(entry)) tryPlay(entry);
+      }
+    }
+  }, { threshold: 0.4 });
+
+  /** Arm a tile to get its player as soon as it's visible on screen. */
+  function armAutoMount(tile, login, opts) {
+    tile.dataset.autoMount = "1";
+    autoMountOpts.set(tile, { login, opts });
+    playObserver.observe(tile);
+  }
+
+  /** Catch-all, runs every 5s: mounts armed tiles that are now properly
+      on screen, and re-nudges never-played players (Twitch re-evaluates
+      autoplay on every play() call, so refusals heal at a quiet moment).
+      A player that has played once is never auto-resumed — a user pause
+      stays paused. */
+  function sweepArmed() {
+    document.querySelectorAll('[data-auto-mount="1"]').forEach((tile) => {
+      const cfg = autoMountOpts.get(tile);
+      if (!cfg || players.has(cfg.login)) return;
+      if (visibleFrac(tile) >= 0.75) {
+        tile.dataset.autoMount = "";
+        gatedMount(tile, cfg.login, cfg.opts);
+      }
+    });
+    const now = Date.now();
+    for (const entry of players.values()) {
+      if (entry.kind !== "api" || entry.everPlayed) continue;
+      if (now - (entry.mountedAt || 0) > 60000) continue;
+      if (!entry.tile.isConnected || visibleFrac(entry.tile) < 0.75) continue;
+      tryPlay(entry);
+    }
+  }
+
+  function mountPlayer(tile, login, opts = {}) {
+    const { muted = true, maxHeight = 0 } = opts;
     const holder = el("div");
     holder.id = "twp-" + (++playerSeq);
     holder.style.cssText = "position:absolute;inset:0;";
-    tile.appendChild(holder);
+    tileMedia(tile).appendChild(holder);
+    tile.classList.add("has-video");
 
     if (embedReady && holder.isConnected) {
       try {
@@ -194,19 +293,6 @@
           try { if (p.isPaused()) p.play(); } catch (e) {}
           if (++nudges >= 3) clearInterval(nudge);
         }, 1500);
-        // When autoplay is blocked (iOS, Low Power Mode, strict browsers)
-        // the only thing that reliably starts playback is a tap on the
-        // player's own play button — so the click-shield stands down until
-        // the stream is actually playing, then arms for audio/swap taps.
-        const shield = tile.querySelector(".click-shield");
-        if (shield) {
-          const arm = (on) => { shield.style.pointerEvents = on ? "" : "none"; };
-          arm(false);
-          p.addEventListener(Twitch.Player.PLAYING, () => arm(true));
-          p.addEventListener(Twitch.Player.PAUSE, () => arm(false));
-          if (Twitch.Player.ENDED) p.addEventListener(Twitch.Player.ENDED, () => arm(false));
-        }
-        tile.classList.add("has-video");
         if (maxHeight) {
           let done = false;
           p.addEventListener(Twitch.Player.PLAYING, () => {
@@ -214,7 +300,15 @@
             setTimeout(() => capQuality(p, maxHeight), 800);
           });
         }
-        players.set(login, { kind: "api", p, tile, login });
+        const entry = { kind: "api", p, tile, login, mountedAt: Date.now(), everPlayed: false };
+        players.set(login, entry);
+        p.addEventListener(Twitch.Player.PLAYING, () => { entry.everPlayed = true; });
+        // Twitch re-evaluates its autoplay requirements on every play()
+        // command — refusals are not final. The 5s sweep keeps nudging
+        // never-played players while their tile is properly visible.
+        p.addEventListener("playbackBlocked", () =>
+          console.warn("[SU] autoplay blocked for", login, "— retrying while visible"));
+        playObserver.observe(tile);
         return;
       } catch (e) {
         console.warn("Twitch.Player failed for", login, "— falling back to iframe", e);
@@ -225,30 +319,7 @@
     f.allow = "autoplay; fullscreen";
     f.allowFullscreen = true;
     holder.appendChild(f);
-    // no player API in iframe mode, so the shield can't know the play
-    // state — leave it down so the native play button always works
-    const shield = tile.querySelector(".click-shield");
-    if (shield) shield.style.pointerEvents = "none";
-    tile.classList.add("has-video");
     players.set(login, { kind: "iframe", f, holder, tile, login });
-  }
-
-  /**
-   * Big players must start muted or the browser blocks their autoplay
-   * entirely — this overlays the one obvious tap that enables sound.
-   * Reads the tile's current login at click time so it survives swaps.
-   */
-  function addSoundCTA(tile) {
-    const b = el("button", "sound-cta", "🔊 TAP FOR SOUND");
-    b.type = "button";
-    b.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      const login = tile.dataset.login;
-      setAudio(login);
-      tryPlay(players.get(login));
-      b.remove();
-    });
-    tile.appendChild(b);
   }
 
   /** Stage note with a START ALL button that pokes every paused player. */
@@ -303,49 +374,67 @@
     return true;
   }
 
-  /**
-   * Exchange the channels of two mounted players. Audio stays with the
-   * physical tile (the big lecture screen keeps the sound), so no mute
-   * toggling is needed — just two setChannel calls.
-   */
-  function swapTwoPlayers(loginA, loginB) {
-    const a = players.get(loginA), b = players.get(loginB);
-    if (!a || !b) return false;
-    const aMuted = state.audioLogin !== loginA;
-    const bMuted = state.audioLogin !== loginB;
-    players.set(loginA, b);
-    players.set(loginB, a);
-    a.login = loginB; b.login = loginA;
-    if (a.kind === "api") { try { a.p.setChannel(loginB); } catch (e) {} }
-    else a.f.src = iframeSrc(loginB, aMuted);
-    if (b.kind === "api") { try { b.p.setChannel(loginA); } catch (e) {} }
-    else b.f.src = iframeSrc(loginA, bMuted);
-    if (state.audioLogin === loginA) state.audioLogin = loginB;
-    else if (state.audioLogin === loginB) state.audioLogin = loginA;
-    return true;
-  }
 
   // ---------- tiles ----------
-  function chipHTML(ch) {
-    const v = ch.live
+  function viewersHTML(ch) {
+    return ch.live
       ? `<span class="dot"></span>${state.apiOK ? fmtViewers(ch.viewers) : "LIVE"}`
       : `<span class="dot"></span>OFFLINE`;
-    return `<span class="chip handle">@${ch.login}</span><span class="chip viewers" data-viewers="${ch.login}">${v}</span>`;
   }
 
-  function makeTile(ch, { hint = "", shield = false } = {}) {
+  /** Append an action button to a tile's label bar. */
+  function barButton(tile, a) {
+    const btn = el("button", "tb-btn" + (a.cls ? " " + a.cls : ""), a.label);
+    btn.type = "button";
+    if (a.title) btn.title = a.title;
+    btn.addEventListener("click", (ev) => { ev.stopPropagation(); a.onClick(tile, btn); });
+    tile.querySelector(".tile-bar").appendChild(btn);
+    return btn;
+  }
+
+  /** Sound button: mounts/starts the stream if needed, then toggles audio. */
+  const AUDIO_ACTION = {
+    label: "🔊", cls: "audio", title: "Sound on/off",
+    onClick: (tile) => {
+      const login = tile.dataset.login;
+      let entry = players.get(login);
+      if (!entry && autoMountOpts.has(tile)) {
+        tile.dataset.autoMount = "";
+        const cfg = autoMountOpts.get(tile);
+        tileMedia(tile).innerHTML = "";
+        mountPlayer(tile, cfg.login, cfg.opts);
+        entry = players.get(login);
+      }
+      if (entry && entryPaused(entry)) tryPlay(entry);
+      setAudio(state.audioLogin === login ? null : login);
+    },
+  };
+
+  /**
+   * Tile = label bar (@handle left, viewers right, action buttons) ABOVE a
+   * bare 16:9 media box. Nothing may overlay the video: Twitch's player
+   * checks that it isn't occluded ("style visibility") and refuses to
+   * autoplay if any element covers it — so all chrome lives in the bar.
+   */
+  function makeTile(ch, { actions = [] } = {}) {
     const tile = el("div", "tile" + (ch.live ? "" : " offline"));
     tile.dataset.login = ch.login;
-    tile.innerHTML = chipHTML(ch);
-    if (hint) tile.appendChild(el("span", "hint", hint));
-    // player iframes swallow clicks — small tiles get a transparent shield
-    // above the player so click-to-sound / click-to-swap keeps working
-    if (shield) tile.appendChild(el("div", "click-shield"));
+    const bar = el("div", "tile-bar");
+    bar.innerHTML =
+      `<span class="chip handle">@${ch.login}</span>` +
+      `<span class="tb-spacer"></span>` +
+      `<span class="chip viewers" data-viewers="${ch.login}">${viewersHTML(ch)}</span>`;
+    tile.appendChild(bar);
+    tile.appendChild(el("div", "tile-media"));
+    for (const a of actions) barButton(tile, a);
     tile.title = ch.title ? `${ch.displayName} — ${ch.title}` : ch.displayName;
     return tile;
   }
 
+  function tileMedia(tile) { return tile.querySelector(".tile-media"); }
+
   function addPreview(tile, ch) {
+    const media = tileMedia(tile);
     const img = el("img", "preview");
     img.loading = "lazy";
     img.alt = "";
@@ -355,9 +444,9 @@
       img.src = previewURL(ch.login);
       img.dataset.livePrev = ch.login;
     } else {
-      tile.appendChild(el("span", "badge-offline", "OFFLINE"));
+      media.appendChild(el("span", "badge-offline", "OFFLINE"));
     }
-    tile.insertBefore(img, tile.firstChild);
+    media.insertBefore(img, media.firstChild);
   }
 
   // ---------- mode: THE WALL ----------
@@ -372,30 +461,32 @@
     stage.appendChild(featured); // attach first: players must mount into the live DOM
     stage.appendChild(grid);
 
+    // promote a preview tile up into the featured row, where the player
+    // is big enough for Twitch to allow it to start
+    const promote = (tile, btn) => {
+      const login = tile.dataset.login;
+      if (players.has(login)) return;
+      featured.appendChild(tile);
+      gatedMount(tile, login, { muted: true, maxHeight: 480 });
+      if (btn) btn.remove();
+      barButton(tile, AUDIO_ACTION);
+      tile.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    };
+
     live.forEach((ch, i) => {
       const withVideo = i < state.videoCap;
-      const tile = makeTile(ch, { hint: withVideo ? "CLICK · SOUND" : "CLICK · WATCH", shield: true });
-      (withVideo ? featured : grid).appendChild(tile);
-      if (withVideo) {
-        mountPlayer(tile, ch.login, { muted: true, maxHeight: 480 });
-      } else {
-        addPreview(tile, ch);
-      }
-      tile.addEventListener("click", () => {
-        const entry = players.get(ch.login);
-        if (entry) {
-          if (entryPaused(entry)) { tryPlay(entry); return; } // resume beats audio toggle
-          setAudio(state.audioLogin === ch.login ? null : ch.login);
-        } else {
-          // promote the preview up into the featured row so the player
-          // is big enough to be allowed to start
-          tile.querySelectorAll(".preview, .badge-offline").forEach((n) => n.remove());
-          featured.appendChild(tile);
-          mountPlayer(tile, ch.login, { muted: true, maxHeight: 480 });
-          tile.querySelector(".hint").textContent = "CLICK · SOUND";
-          tile.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
+      const tile = makeTile(ch, {
+        actions: withVideo
+          ? [AUDIO_ACTION]
+          : [{ label: "▶", cls: "watch", title: "Start watching", onClick: (t, b) => promote(t, b) }],
       });
+      (withVideo ? featured : grid).appendChild(tile);
+      addPreview(tile, ch); // stays until the player mounts on-screen
+      if (withVideo) {
+        armAutoMount(tile, ch.login, { muted: true, maxHeight: 480 });
+      } else {
+        tileMedia(tile).addEventListener("click", () => promote(tile, tile.querySelector(".tb-btn")));
+      }
     });
 
     offline.forEach((ch) => {
@@ -408,7 +499,7 @@
       stage.appendChild(el("p", "stage-note", "Nobody selected — open the <b>ROSTER</b> and pick your streamers."));
     } else {
       stage.appendChild(noteWithPlayAll(
-        `<b>${live.length}</b> live · top <b>${Math.min(state.videoCap, live.length)}</b> playing video, the rest are live previews (click any to start video · click a playing tile for sound)`));
+        `<b>${live.length}</b> live · top <b>${Math.min(state.videoCap, live.length)}</b> playing video, the rest are live previews · press <b>▶</b> on a preview to start it · press <b>🔊</b> on a tile for sound`));
     }
   }
 
@@ -449,27 +540,39 @@
     bigTile.classList.add("main");
     grid.appendChild(bigTile);
 
-    const ringTiles = [];
+    // Ring tiles are live PREVIEWS, not players: Twitch hard-refuses
+    // autoplay for embeds under 400x300 ("size"), which ring tiles
+    // necessarily are. The big screen is where video+audio happens.
+    const doSwap = (t) => {
+      const oldBig = bigTile.dataset.login;
+      const promote = t.dataset.login; // channel currently in this small tile
+      if (promote === oldBig) return;
+      const entry = players.get(oldBig);
+      if (entry) {
+        swapPlayerChannel(oldBig, promote);
+        tryPlay(players.get(promote));
+      } else if (autoMountOpts.has(bigTile)) {
+        autoMountOpts.get(bigTile).login = promote; // not mounted yet
+      }
+      state.focusLogin = promote;
+      bigTile.dataset.login = promote;
+      t.dataset.login = oldBig;
+      refreshTileChips(bigTile, state.byLogin.get(promote));
+      refreshTileChips(t, state.byLogin.get(oldBig));
+      const img = t.querySelector(".preview");
+      if (img) { img.dataset.livePrev = oldBig; img.src = previewURL(oldBig); }
+      renderStrip();
+      save();
+    };
+
     ring.forEach((ch, i) => {
-      const t = makeTile(ch, { hint: "CLICK · SWAP TO MAIN", shield: true });
+      const t = makeTile(ch, {
+        actions: [{ label: "◉", cls: "swap", title: "Put on the main screen", onClick: (tt) => doSwap(tt) }],
+      });
       t.style.gridArea = AREAS[i];
       grid.appendChild(t);
-      ringTiles.push([t, ch]);
-      t.addEventListener("click", () => {
-        const oldBig = bigTile.dataset.login;
-        const promote = t.dataset.login; // channel currently in this small tile
-        if (promote === oldBig) return;
-        if (!swapTwoPlayers(oldBig, promote)) return;
-        tryPlay(players.get(oldBig));
-        tryPlay(players.get(promote));
-        state.focusLogin = promote;
-        t.dataset.login = oldBig;
-        bigTile.dataset.login = promote;
-        refreshTileChips(t, state.byLogin.get(oldBig));
-        refreshTileChips(bigTile, state.byLogin.get(promote));
-        renderStrip();
-        save();
-      });
+      addPreview(t, ch);
+      tileMedia(t).addEventListener("click", () => doSwap(t));
     });
 
     let stripEl = null;
@@ -482,14 +585,13 @@
       stripEl = s;
     };
 
-    // players mount only after the grid is in the document; the big one
-    // starts muted too (browsers veto unmuted autoplay) with a sound CTA
-    mountPlayer(bigTile, focusCh.login, { muted: true });
-    addSoundCTA(bigTile);
-    for (const [t, ch] of ringTiles) mountPlayer(t, ch.login, { muted: true, maxHeight: 480 });
+    // the player mounts once the tile is visible and layout has settled;
+    // it starts muted (browsers veto unmuted autoplay) — 🔊 turns it on
+    barButton(bigTile, { ...AUDIO_ACTION, label: "🔊 SOUND", cls: "audio gold" });
+    armAutoMount(bigTile, focusCh.login, { muted: true });
     renderStrip();
     stage.appendChild(noteWithPlayAll(
-      "Big screen carries the <b>audio</b> — tap 🔊 once to enable it. Click a small tile to swap it into the main slot."));
+      "Press <b>🔊 SOUND</b> on the big screen for audio. Click a side preview (or its <b>◉</b>) to put it on the main screen."));
   }
 
   function refreshTileChips(tile, ch) {
@@ -516,16 +618,11 @@
 
     const grid = el("div", "quad-grid");
     stage.appendChild(grid); // attach first: players must mount into the live DOM
-    state.quadLogins.forEach((login, i) => {
+    state.quadLogins.forEach((login) => {
       const ch = state.byLogin.get(login);
-      const t = makeTile(ch, { hint: "CLICK · SOUND", shield: true });
+      const t = makeTile(ch, { actions: [AUDIO_ACTION] });
       grid.appendChild(t);
-      mountPlayer(t, login, { muted: true });
-      t.addEventListener("click", () => {
-        const entry = players.get(login);
-        if (entry && entryPaused(entry)) { tryPlay(entry); return; }
-        setAudio(state.audioLogin === login ? null : login);
-      });
+      armAutoMount(t, login, { muted: true });
     });
 
     stage.appendChild(renderPickStrip(
@@ -541,7 +638,7 @@
       (login) => state.quadLogins.includes(login)
     ));
     stage.appendChild(el("p", "stage-note",
-      "Pick up to <b>4</b> from the strip. Click a tile to move the <b>audio</b>."));
+      "Pick up to <b>4</b> from the strip. Press <b>🔊</b> on a tile for its audio."));
   }
 
   // ---------- mode: MAIN STAGE (theater) ----------
@@ -554,7 +651,7 @@
     const ch = state.byLogin.get(state.theaterLogin);
 
     const layout = el("div", "theater-layout");
-    const t = makeTile(ch);
+    const t = makeTile(ch, { actions: [{ ...AUDIO_ACTION, label: "🔊 SOUND", cls: "audio gold" }] });
     layout.appendChild(t);
 
     const chatWrap = el("div", "theater-chat");
@@ -563,8 +660,7 @@
     chatWrap.appendChild(chat);
     layout.appendChild(chatWrap);
     stage.appendChild(layout);
-    mountPlayer(t, ch.login, { muted: true });
-    addSoundCTA(t);
+    armAutoMount(t, ch.login, { muted: true });
 
     stage.appendChild(renderPickStrip(
       (login) => { state.theaterLogin = login; renderStage(); save(); },
@@ -594,12 +690,11 @@
     bar.append(info, right);
 
     const ch0 = live[tourIndex];
-    const tile = makeTile(ch0);
+    const tile = makeTile(ch0, { actions: [{ ...AUDIO_ACTION, label: "🔊 SOUND", cls: "audio gold" }] });
 
     wrap.append(bar, tile);
     stage.appendChild(wrap);
-    mountPlayer(tile, ch0.login, { muted: true });
-    addSoundCTA(tile);
+    armAutoMount(tile, ch0.login, { muted: true });
     stage.appendChild(el("p", "stage-note", "Touring every live channel in your selection, in order. Sit back."));
 
     const updateBar = () => {
@@ -716,6 +811,7 @@
       if (ch && ch.live) pv.textContent = state.apiOK ? fmtViewers(ch.viewers) : "LIVE";
     });
     if (!$("rosterDrawer").hidden) updateRosterLive();
+    sweepArmed();
   }
 
   /** Refresh the live/viewer column of the roster drawer without
@@ -833,6 +929,8 @@
       const ch = state.byLogin.get(c.login);
       const item = el("section", "feed-item");
       item.dataset.idx = i;
+      // meta sits BELOW the player — overlaying it would block the clip's
+      // autoplay (Twitch occlusion check), same rule as the stream tiles
       item.innerHTML = `
         <div class="feed-stage">
           <div class="feed-player" data-slug="${c.slug}"></div>
@@ -996,7 +1094,6 @@
   // ---------- boot ----------
   async function boot() {
     if (IS_FILE) $("fileNotice").hidden = false;
-    inlineCrests();
 
     const savedSelected = load();
 
@@ -1010,7 +1107,12 @@
 
     bindUI();
 
-    await Promise.all([loadEmbedScript(), refreshData(true)]);
+    // wait for fonts + crest so the first layout is stable — Twitch's
+    // player refuses autoplay if the page shifts during its checks
+    const fontsReady = document.fonts && document.fonts.ready
+      ? Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 2500))])
+      : Promise.resolve();
+    await Promise.all([loadEmbedScript(), refreshData(true), fontsReady, inlineCrests()]);
 
     if (Array.isArray(savedSelected)) {
       state.selected = new Set(savedSelected.filter((l) => state.byLogin.has(l)));
@@ -1026,6 +1128,9 @@
 
     setInterval(refreshData, 5000);
   }
+
+  // debugging hook (harmless): lets the console inspect live player state
+  window.__SU_DEBUG__ = { players, state };
 
   document.readyState === "loading"
     ? document.addEventListener("DOMContentLoaded", boot)

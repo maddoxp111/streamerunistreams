@@ -116,8 +116,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(19, 19, 24, 0.92);
-  backdrop-filter: blur(10px);
+  background: var(--ink-2);
   border-bottom: 1px solid var(--line);
 }
 
@@ -232,54 +231,46 @@ body {
 .loading p { font-family: var(--varsity); letter-spacing: 4px; color: var(--gold); font-size: 14px; }
 @keyframes pulse { 0%,100% { opacity: 0.5; transform: scale(1);} 50% { opacity: 1; transform: scale(1.06);} }
 
-/* ---- Tiles (shared by all modes) ---- */
+/* ---- Tiles (shared by all modes): a label bar ABOVE a bare 16:9 video.
+   Nothing may overlay the video — Twitch's player detects occlusion
+   ("style visibility") and refuses to autoplay when covered. ---- */
 .tile {
-  position: relative;
-  background: #000;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-2);
   border: 1px solid var(--line);
   border-radius: 4px;
   overflow: hidden;
-  aspect-ratio: 16 / 9;
-  cursor: pointer;
+  min-width: 0;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.tile:hover { border-color: var(--gold); z-index: 2; }
+.tile:hover { border-color: var(--gold); }
 .tile.has-audio { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 0 18px rgba(201,162,75,0.35); }
 
-.tile iframe, .tile .preview {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  display: block;
+.tile-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 7px;
+  background: linear-gradient(180deg, #20202a, #15151c);
+  border-bottom: 1px solid var(--line);
+  min-height: 29px;
 }
-.tile .preview { object-fit: cover; background: var(--ink-2); }
+.tb-spacer { flex: 1; }
 
-.tile.offline .preview { filter: grayscale(1) brightness(0.45); }
-
-/* overlay chips: @handle top-left, viewers top-right */
 .tile .chip {
-  position: absolute;
-  top: 6px;
-  z-index: 3;
   font-family: var(--sans);
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.5px;
-  padding: 3px 8px;
-  border-radius: 3px;
-  background: rgba(10, 10, 12, 0.78);
-  backdrop-filter: blur(4px);
-  pointer-events: none;
-  line-height: 1.35;
-  max-width: 60%;
+  line-height: 1.3;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
 }
-.tile .chip.handle { left: 6px; color: var(--parchment); border-left: 3px solid var(--gold); }
-.tile .chip.viewers { right: 6px; color: #fff; }
+.tile .chip.handle { color: var(--parchment); border-left: 3px solid var(--gold); padding-left: 6px; }
+.tile .chip.viewers { color: #fff; flex: 0 0 auto; }
 .tile .chip.viewers .dot {
   display: inline-block;
   width: 7px; height: 7px;
@@ -291,47 +282,56 @@ body {
 .tile.offline .chip.viewers .dot { background: #555; animation: none; }
 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-.tile .badge-offline {
+.tb-btn {
+  flex: 0 0 auto;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  background: var(--ink-3);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 8px;
+  cursor: pointer;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.tb-btn:hover { border-color: var(--gold); color: var(--gold-bright); }
+.tb-btn.gold, .tile.has-audio .tb-btn.audio {
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  border-color: var(--gold);
+}
+
+.tile-media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.tile-media iframe, .tile-media .preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+.tile-media .preview { object-fit: cover; background: var(--ink-2); cursor: pointer; }
+.tile.offline .preview { filter: grayscale(1) brightness(0.45); cursor: default; }
+
+.tile-media .badge-offline {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2;
   font-family: var(--varsity);
   font-size: 12px;
   letter-spacing: 3px;
   color: rgba(233, 230, 221, 0.4);
   pointer-events: none;
 }
-
-/* transparent layer above small-tile players so clicks reach the tile,
-   not the embedded iframe (big/main players don't get one) */
-.tile .click-shield {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  cursor: pointer;
-}
-
-/* hover action hint */
-.tile .hint {
-  position: absolute;
-  bottom: 6px;
-  left: 6px;
-  z-index: 3;
-  font-family: var(--sans);
-  font-size: 10px;
-  letter-spacing: 1.5px;
-  color: var(--gold-bright);
-  background: rgba(10,10,12,0.78);
-  padding: 3px 7px;
-  border-radius: 3px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  pointer-events: none;
-}
-.tile:hover .hint { opacity: 1; }
 
 /* ---- THE WALL ---- */
 .wall-grid {
@@ -359,38 +359,32 @@ body {
   margin: 0 auto;
   align-items: center;
 }
-.lecture-grid .tile {
-  aspect-ratio: 16 / 9;
-  width: 100%;
-  height: auto;
-  min-width: 0;
-  min-height: 0;
-}
-.lecture-grid .tile.main { grid-area: m; cursor: default; }
+.lecture-grid .tile { width: 100%; min-width: 0; }
+.lecture-grid .tile.main { grid-area: m; }
 
 .lecture-grid.ring-4 {
   grid-template-columns: 1fr 3fr 1fr;
   grid-template-areas: "a m c" "b m d";
-  max-width: calc((100vh - 190px) * 2.9);
-  max-width: calc((100dvh - 190px) * 2.9);
+  max-width: calc((100vh - 210px) * 2.9);
+  max-width: calc((100dvh - 210px) * 2.9);
 }
 .lecture-grid.ring-6 {
   grid-template-columns: 1fr 3fr 1fr;
   grid-template-areas: "a m d" "b m e" "c m f";
-  max-width: calc((100vh - 190px) * 2.6);
-  max-width: calc((100dvh - 190px) * 2.6);
+  max-width: calc((100vh - 280px) * 2.9);
+  max-width: calc((100dvh - 280px) * 2.9);
 }
 .lecture-grid.ring-8 {
   grid-template-columns: 1fr 3.2fr 1fr;
   grid-template-areas: "a m e" "b m f" "c m g" "d m h";
-  max-width: calc((100vh - 190px) * 2.2);
-  max-width: calc((100dvh - 190px) * 2.2);
+  max-width: calc((100vh - 315px) * 2.3);
+  max-width: calc((100dvh - 315px) * 2.3);
 }
 .lecture-grid.ring-12 {
   grid-template-columns: 1fr 1fr 2.9fr 1fr 1fr;
   grid-template-areas: "a b m g h" "c d m i j" "e f m k l";
-  max-width: calc((100vh - 190px) * 3.9);
-  max-width: calc((100dvh - 190px) * 3.9);
+  max-width: calc((100vh - 280px) * 4);
+  max-width: calc((100dvh - 280px) * 4);
 }
 
 /* ---- STUDY GROUP (quad) ---- */
@@ -422,11 +416,8 @@ body {
 
 /* big single players stay 16:9 and fit the viewport */
 .tour-wrap .tile, .theater-layout .tile {
-  aspect-ratio: 16 / 9;
-  width: auto;
-  max-width: 100%;
-  max-height: calc(100vh - 240px);
-  max-height: calc(100dvh - 240px);
+  width: min(100%, calc((100vh - 310px) * 16 / 9));
+  width: min(100%, calc((100dvh - 310px) * 16 / 9));
   margin: 0 auto;
   justify-self: center;
 }
@@ -518,34 +509,6 @@ body {
   vertical-align: 1px;
 }
 .btn-mini:hover { background: var(--maroon-deep); color: var(--parchment); }
-
-/* big players start muted (browsers block unmuted autoplay) — this is
-   the one obvious tap that turns the sound on */
-.sound-cta {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  z-index: 4;
-  font-family: var(--sans);
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: var(--ink);
-  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
-  border: 1px solid var(--gold);
-  border-radius: 999px;
-  padding: 10px 22px;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.65);
-  animation: ctapulse 2.2s ease-in-out infinite;
-}
-.sound-cta:hover { filter: brightness(1.1); }
-@keyframes ctapulse {
-  0%, 100% { box-shadow: 0 4px 24px rgba(0,0,0,0.65), 0 0 0 0 rgba(201,162,75,0.55); }
-  50% { box-shadow: 0 4px 24px rgba(0,0,0,0.65), 0 0 0 12px rgba(201,162,75,0); }
-}
 
 /* ============ CLIPS ============ */
 .clips-section {
@@ -899,17 +862,21 @@ body {
 }
 
 .feed-stage {
+  width: min(100%, calc((100vh - 260px) * 16 / 9));
+  width: min(100%, calc((100dvh - 260px) * 16 / 9));
+}
+/* meta lives BELOW the player: overlaying it would trip Twitch's
+   occlusion check and block the clip's autoplay */
+.feed-player {
   position: relative;
-  width: min(100%, calc((100vh - 90px) * 16 / 9));
   aspect-ratio: 16 / 9;
-  max-height: 100%;
   background: #000;
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 12px 60px rgba(0,0,0,0.8);
 }
-.feed-player, .feed-player iframe {
+.feed-player iframe {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -917,14 +884,7 @@ body {
   border: 0;
 }
 
-.feed-meta {
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  z-index: 3;
-  padding: 40px 16px 12px;
-  background: linear-gradient(0deg, rgba(5,5,8,0.88), transparent);
-  pointer-events: none;
-}
+.feed-meta { padding: 12px 6px 0; }
 .feed-handle {
   font-family: var(--sans);
   font-weight: 600;
@@ -1033,7 +993,7 @@ body {
     max-width: none;
     gap: 6px;
   }
-  .lecture-grid .tile { grid-area: auto !important; aspect-ratio: 16 / 9; }
+  .lecture-grid .tile { grid-area: auto !important; }
   .lecture-grid .tile.main { grid-column: 1 / -1; order: -1; }
   .quad-grid { gap: 6px; }
   .theater-chat iframe { min-height: 320px; }
